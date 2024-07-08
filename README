@@ -5,7 +5,7 @@ Put your image set in the dataset folder. You can use a symbolic link to the act
 Use the following command to create a symbolic link:
 
 ```bash
-ln -s /path/to/your/dataset dataset
+ln -s /path/to/your/dataset/* dataset
 ```
 
 Folder structure should be as follows:
