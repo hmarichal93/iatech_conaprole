@@ -1,1 +1,13 @@
 Please do not push to master branch. Use develop branch instead :)
+
+## Dataset
+Put your image set in the dataset folder. You can use a symbolic link to the actual location of the dataset.
+Use the following command to create a symbolic link:
+
+```bash
+ln -s /path/to/your/dataset dataset
+```
+
+Folder structure should be as follows:
+* images - images provided by CONAPROLE
+* annotations - human labels for the images.
