@@ -11,3 +11,12 @@ ln -s /path/to/your/dataset/* dataset
 Folder structure should be as follows:
 * images - images provided by CONAPROLE
 * annotations - human labels for the images.
+
+
+## GEnerate gt annotations
+
+1.0 download yolov5 baseline predicctions: https://github.com/hmarichal93/iatech_conaprole/releases/tag/v1.0
+2.0 run the following command
+```bash
+python main --mannually_modify_predictions
+```
