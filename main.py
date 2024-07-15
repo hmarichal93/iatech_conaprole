@@ -33,7 +33,7 @@ def mannually_modify_predictions(dataset_dir, prediction_dirs, annotated_files="
         print(command)
         os.system(command)
         #command = (f"cd {str(output_dir)} && " +
-        command = f"labelme \"{str(json_path)}\" --output \"{str(json_new_name)}\""
+        command = f"labelme \"{str(json_new_name)}\""
         print(command)
         os.system(command)
 
