@@ -253,16 +253,25 @@ class ProductIdentificationApp:
         pass
 
 
-def main():
-    image_path = Path("./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/WhatsApp Image 2024-05-27 at 09.23.32 (1).jpeg")
+def main(image_path, bbox_annotation_dir, output_dir):
+    #image_path = Path("./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/WhatsApp Image 2024-05-27 at 09.23.32 (1).jpeg")
+    image_path = Path(image_path)
     annotation_name = str(image_path.stem).replace(" ", "_") + "_modified.json"
-    bbox_annotation_path = f"/data/ia_tech_conaprole/dataset/modified/{annotation_name}"
+    bbox_annotation_path = f"{bbox_annotation_dir}/{annotation_name}"
 
     app = ProductIdentificationApp(image_path, bbox_annotation_path)
-    output_path = "./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/annotations.csv"
+    #output_path = "./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/annotations.csv"
+    output_path = f"{output_dir}/annotations.csv"
     app.run(output_path)
 
     return
 
 if __name__ == "__main__":
-    main()
+    #add as arguments the image_path and the bbox_annotation_dir and the output_dir
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--image_path", type=str, default="./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/WhatsApp Image 2024-05-27 at 09.23.32 (1).jpeg")
+    parser.add_argument("--bbox_annotation_dir", type=str, default="/data/ia_tech_conaprole/dataset/modified")
+    parser.add_argument("--output_dir", type=str, default="./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/")
+    args = parser.parse_args()
+    main(args.image_path, args.bbox_annotation_dir, args.output_dir)
