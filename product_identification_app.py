@@ -114,11 +114,16 @@ class ProductIdentificationApp:
         product_metadata_path = "./output/product_frequency.csv"
         product_metadata = pd.read_csv(product_metadata_path)
         #get row that match self.product_path
-        product_metadata = product_metadata[product_metadata["product_path"] == self.product_path]
-        if product_metadata.shape[0] == 0:
-            print("Product not found")
-            return
-        self.product_id = product_metadata["product_id"].values[0]
+        #product_metadata = product_metadata[product_metadata["product_path"] == self.product_path]
+        #if product_metadata.shape[0] == 0:
+        #    print("Product not found")
+        #    return
+
+        #self.product_id = product_metadata["product_id"].values[0]
+        #create an unique integer id for the product based on the product_path.stem
+        self.product_id = hash(Path(self.product_path).stem)
+        print(f"Product id: {self.product_id}")
+
         self.show_product()
         self.product_bbox_annotations = []
         #self.__build_ui()
