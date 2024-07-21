@@ -37,7 +37,8 @@ class ProductIdentificationApp:
         y_min = min(y1, y2)
         x_max = max(x1, x2)
         x_min = min(x1, x2)
-        return y_min, y_max, x_min, x_max
+
+        return int(y_min), int(y_max), int(x_min), int(x_max)
     def _draw_bbox_annotations(self):
         image_to_display = self.image.copy()
         for bbox in self.all_bbox_annotations:
@@ -121,7 +122,7 @@ class ProductIdentificationApp:
 
         #self.product_id = product_metadata["product_id"].values[0]
         #create an unique integer id for the product based on the product_path.stem
-        self.product_id = hash(Path(self.product_path).stem)
+        self.product_id = Path(self.product_path).stem
         print(f"Product id: {self.product_id}")
 
         self.show_product()
@@ -266,7 +267,8 @@ def main(image_path, bbox_annotation_dir, output_dir):
 
     app = ProductIdentificationApp(image_path, bbox_annotation_path)
     #output_path = "./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/annotations.csv"
-    output_path = f"{output_dir}/annotations.csv"
+    Path(f"{output_dir}/{image_path.stem}").mkdir(parents=True, exist_ok=True)
+    output_path = f"{output_dir}/{image_path.stem}/annotations.csv"
     app.run(output_path)
 
     return
@@ -277,6 +279,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--image_path", type=str, default="./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/WhatsApp Image 2024-05-27 at 09.23.32 (1).jpeg")
     parser.add_argument("--bbox_annotation_dir", type=str, default="/data/ia_tech_conaprole/dataset/modified")
-    parser.add_argument("--output_dir", type=str, default="./assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/")
+    parser.add_argument("--output_dir", type=str, default="./assets/")
     args = parser.parse_args()
     main(args.image_path, args.bbox_annotation_dir, args.output_dir)

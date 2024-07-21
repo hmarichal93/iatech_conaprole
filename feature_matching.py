@@ -31,7 +31,7 @@ class Product:
         self.image_path = image_path
         self.image = cv.imread(str(image_path))#, cv.IMREAD_GRAYSCALE)
         self.kp, self.des = compute_descriptors(self.image)
-        self.id = idx
+        self.id = Path(image_path).stem
 
     def __eq__(self, other):
         return self.id == other.id
@@ -141,7 +141,7 @@ class AisleProductMatcher:
             l_rings = []
             for ring in json_content['shapes']:
                 if ring['shape_type'] == "rectangle":
-                    l_rings.append(np.array(ring['points'])[:, [1, 0]].tolist())
+                    l_rings.append(np.array(ring['points'], dtype=int)[:, [1, 0]].tolist())
 
         except FileNotFoundError:
             l_rings = []
@@ -622,7 +622,35 @@ def convert_top_up_botton_down_bbox_to_yolov5(bbox):
     y_center = y1 + height/2
     return (int(x_center), int(y_center), int(width), int(height))
 
+def merge_all_labels_in_one_file(output_dir="./output_product_id"):
+    csv_files = Path(output_dir).rglob("*.csv")
+    csv_files = [path for path in csv_files if not str(path).endswith("status.csv")]
+    data = []
+    for csv_file in csv_files:
+        df = pd.read_csv(csv_file)
+        image_name = Path(csv_file).stem.split("_")[0]
+        for idx, row in df.iterrows():
+            x1, y1, x2, y2 = row["x1"], row["y1"], row["x2"], row["y2"]
+            product_id = row["product_id"]
+            W = row["W"]
+            H = row["H"]
+            data.append([image_name, x1, y1, x2, y2, product_id, W, H])
+
+    df = pd.DataFrame(data, columns=["image_name", "x1", "y1", "x2", "y2", "product_id", "W", "H"])
+    df.to_csv(f"{output_dir}/all_labels.csv", index=False)
+
+    #compute product frequency
+    df["product_id"].hist()
+    plt.show()
+
+    return
+
+
+
 if __name__=="__main__":
     #using_sift_for_classifier_object()
     #count_product_frequency_in_aisle()
-    check_first_iteration_product_id()
+    #Product identification app
+    #check_first_iteration_product_id()
+    #count frequency
+    merge_all_labels_in_one_file()
