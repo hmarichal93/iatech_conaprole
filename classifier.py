@@ -1,9 +1,179 @@
 import cv2
 import cv2 as cv
 import numpy as np
+import pandas as pd
+
+from pathlib import Path
+from abc import ABC, abstractmethod
+from feature_matching import ProductStore
+from pathlib import Path
+from feature_matching import AisleProductMatcher, resize_image_using_pil_lib, there_is_intersection
+from product_identification_app import ProductIdentificationApp
+import pandas as df
+from tqdm import tqdm
+
+import torch
+
+class Product:
+    def __init__(self, name, images_list):
+        self.name = name
+        self.image_list = images_list
+
+    def get_dataframe(self):
+        #generate dataframe with header name and image path
+        df = pd.DataFrame(columns=["name", "image_path"])
+        for image_path in self.image_list:
+            #df = df.append({"name": self.name, "image_path": image_path}, ignore_index=True)
+            df.loc[df.shape[0]] = [self.name, str(image_path)]
+
+        return df
 
 
-class Classifier:
+
+
+class Classifier(ABC):
+    def __init__(self, product_database_path=None, product_database_dir=None):
+        if not Path(product_database_path).exists():
+            self.__build_product_database(product_database_dir, product_database_path)
+
+        self.df_products = pd.read_csv(product_database_path)
+
+
+
+    def __build_product_database(self, product_database_dir, product_database_path):
+        """
+        Directory with images of each product. In each product folder, there are several images from the same product.
+        :param product_database_dir:
+        :return:
+        """
+        product_database_dir = Path(product_database_dir)
+        products = []
+        file_extension = [".jpeg", ".webp", ".png", ".jpg"]
+        for product_dir in product_database_dir.iterdir():
+            if not product_dir.is_dir():
+                continue
+
+            product_name = product_dir.name
+            images = []
+            for file_extension in file_extension:
+                images += list(product_dir.rglob(f"*{file_extension}"))
+
+            product = Product(product_name, images)
+            products.append(product)
+
+        #save the database
+        df = pd.DataFrame(columns=["name", "image_path"])
+        for product in products:
+            #df = df.append(product.get_dataframe(), ignore_index=True)
+            #using df.loc for appending df
+            for idx, row in product.get_dataframe().iterrows():
+                df.loc[df.shape[0]] = [row['name'], row.image_path]
+
+        df.to_csv(product_database_path, index=False)
+        return
+
+    @abstractmethod
+    def compute_similarity(self, image1, image2):
+        """
+        Compute the similarity between two images.
+        This method must be implemented by all subclasses of Classifier.
+        """
+        pass
+
+    def predict(self, image):
+        best_similarity = 0
+        best_product = None
+        best_image_template = None
+        for idx, row in tqdm(self.df_products.iterrows(),desc="Predicting", total=self.df_products.shape[0]):
+            image_template_path = row.image_path
+            image_template = cv.imread(image_template_path)
+            #compute the similarity
+            similarity = self.compute_similarity(image, image_template)
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_product = row['name']
+                best_image_template = image_template_path
+
+        return best_product, best_image_template
+
+from kornia.feature import LoFTR
+import kornia.feature as KF
+import kornia as K
+from kornia_moons.viz import draw_LAF_matches
+
+class Loftr_Classifier(Classifier):
+    def __init__(self, product_database_path=None, product_database_dir=None):
+        super().__init__(product_database_path, product_database_dir)
+        self.matcher =  LoFTR(pretrained="indoor_new").cuda()
+
+    def compute_similarity(self, image1, image2):
+        """Compute matching score between two images using LoFTR."""
+        #convert numpy array to tensor
+        image_1_path = "/tmp/image1.png"
+        cv2.imwrite(image_1_path, image1)
+        image_2_path = "/tmp/image2.png"
+        cv2.imwrite(image_2_path, image2)
+
+        image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...]
+        image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...]
+
+        img1 = K.geometry.resize(image1, (480, 640), antialias=True).cuda()
+        img2 = K.geometry.resize(image2, (480, 640), antialias=True).cuda()
+
+        # compute the matches
+        input_dict = {
+            "image0": K.color.rgb_to_grayscale(img1),  # LofTR works on grayscale images only
+            "image1": K.color.rgb_to_grayscale(img2),
+        }
+        #matches = self.matcher(input_dict)
+
+        with torch.inference_mode():
+            correspondences = self.matcher(input_dict)
+
+        mkpts0 = correspondences["keypoints0"].cpu().numpy()
+        mkpts1 = correspondences["keypoints1"].cpu().numpy()
+        if mkpts0.shape[0] < 4:
+            return 0
+        try:
+            Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+            inliers = inliers > 0
+        except cv2.error as e:
+            inliers = []
+            pass
+        ##
+        # draw_LAF_matches(
+        #     KF.laf_from_center_scale_ori(
+        #         torch.from_numpy(mkpts0).view(1, -1, 2),
+        #         torch.ones(mkpts0.shape[0]).view(1, -1, 1, 1),
+        #         torch.ones(mkpts0.shape[0]).view(1, -1, 1),
+        #     ),
+        #     KF.laf_from_center_scale_ori(
+        #         torch.from_numpy(mkpts1).view(1, -1, 2),
+        #         torch.ones(mkpts1.shape[0]).view(1, -1, 1, 1),
+        #         torch.ones(mkpts1.shape[0]).view(1, -1, 1),
+        #     ),
+        #     torch.arange(mkpts0.shape[0]).view(-1, 1).repeat(1, 2),
+        #     K.tensor_to_image(img1),
+        #     K.tensor_to_image(img2),
+        #     inliers,
+        #     draw_dict={
+        #         "inlier_color": (0.2, 1, 0.2),
+        #         "tentative_color": (1.0, 0.5, 1),
+        #         "feature_color": (0.2, 0.5, 1),
+        #         "vertical": False,
+        #     },
+        # )
+
+        return len(inliers)
+
+
+
+
+
+
+
+
+class Sift_Classifier:
     def __init__(self, product_store):
         self.product_store = product_store
 
@@ -60,7 +230,7 @@ class Classifier:
                 max_matches = matches
                 predicted_product = product
 
-        print (f"Matches: {max_matches} ")
+        #print (f"Matches: {max_matches} ")
         return predicted_product
 
     def get_product_by_id(self, idx):
@@ -71,20 +241,17 @@ class Classifier:
 
 
 def test_classifier():
-    from feature_matching import ProductStore
-    from pathlib import Path
-    from feature_matching import AisleProductMatcher, resize_image_using_pil_lib, there_is_intersection
-    from product_identification_app import ProductIdentificationApp
-    import pandas as df
-    from tqdm import tqdm
+
 
     product_store = ProductStore()
-    classifier = Classifier(product_store)
+    classifier = Sift_Classifier(product_store)
     image_path = "assets/WhatsApp Image 2024-05-27 at 09.23.32 (1)/WhatsApp Image 2024-05-27 at 09.23.32 (1).jpeg"
     image_path = "assets/WhatsApp Image 2024-05-27 at 12.50.36 (1)/WhatsApp Image 2024-05-27 at 12.50.36 (1).jpeg"
     image_path = "assets/WhatsApp Image 2024-05-29 at 09.01.25 (1)/WhatsApp Image 2024-05-29 at 09.01.25 (1).jpeg"
     image_path = "assets/WhatsApp Image 2024-05-29 at 09.01.16 (3)/WhatsApp Image 2024-05-29 at 09.01.16 (3).jpeg"
     image_path = "assets/WhatsApp Image 2024-05-27 at 11.44.47/WhatsApp Image 2024-05-27 at 11.44.47.jpeg"
+    image_path = "./assets/WhatsApp Image 2024-05-27 at 12.50.35 (1)/WhatsApp Image 2024-05-27 at 12.50.35 (1).jpeg"
+    image_path = "./assets/IMG_9140/IMG_9140.png"
     output_dir = Path(image_path).parent / "output"
     gt_prod_id_file = Path(image_path).parent / "annotations.csv"
     gt_prod_id_elements = df.read_csv(gt_prod_id_file)
@@ -96,6 +263,7 @@ def test_classifier():
     #extract bounding boxes
     image_path = Path(image_path)
     bbox_annotation_dir = "/data/ia_tech_conaprole/dataset/modified"
+    bbox_annotation_dir = "./assets/IMG_9140/"
     annotation_name = str(image_path.stem).replace(" ", "_") + "_modified.json"
     bbox_annotation_path = f"{bbox_annotation_dir}/{annotation_name}"
     bbox_list = AisleProductMatcher.load_labelme_rectangle_shapes(bbox_annotation_path)
@@ -106,6 +274,7 @@ def test_classifier():
         if len(gt_prod_id) == 0:
             #print(f"bbox idx {idx} Cannot find ground truth product id")
             continue
+
         y_min, y_max, x_min, x_max = ProductIdentificationApp._get_rectangle_top_bottom(bbox)
         y_min = max(0, y_min)
         y_max = min(H-1, y_max)
@@ -128,23 +297,95 @@ def test_classifier():
         #concatenate images
         aux_image = np.concatenate([image, bbox_global_image, product_global_image], axis=1)
         output_path = output_dir / f"output_{idx}.jpg"
-        cv.imwrite(output_path, aux_image)
+        cv.imwrite(output_path, resize_image_using_pil_lib(aux_image, 800, 800))
 
 
         gt_prod_id = gt_prod_id[0]
         if product and product.id == gt_prod_id:
-            #print(f"Product {product.id} was correctly identified")
+            print(f"Product {product.id} was correctly identified")
             debug_image[y_min:y_max, x_min:x_max,  1] = 125
         else:
-            #print(f"Product {product.id} was not correctly identified")
-            debug_image[y_min:y_max, x_min:x_max, 2] = 255
+            print(f"Product {product.id} was not correctly identified as {gt_prod_id}")
+            debug_image[y_min:y_max, x_min:x_max, 2] = 125
 
     cv.imwrite(output_dir / "debug.jpg", debug_image)
+
+    return
+
+def evaluate_classifier(image_target_dir="./assets/IMG_9140"):
+    image_target_dir = Path(image_target_dir)
+    output_dir = image_target_dir / "output"
+    gt_prod_id_file = image_target_dir / "annotations.csv"
+    gt_prod_id_elements = df.read_csv(gt_prod_id_file)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    image_path = next(image_target_dir.glob("*.png"))
+    image = cv.imread(image_path
+                      )
+    H, W, _ = image.shape
+    p_f = 10
+    # extract bounding boxes
+    bbox_annotation_dir = image_target_dir
+    annotation_name = str(image_path.stem).replace(" ", "_") + "_modified.json"
+    bbox_annotation_path = f"{bbox_annotation_dir}/{annotation_name}"
+    bbox_list = AisleProductMatcher.load_labelme_rectangle_shapes(bbox_annotation_path)
+    debug_image = image.copy()
+    #instantiate classifier
+    root = "/data/ia_tech_conaprole/dataset/matcher_classifier"
+    classifier = Loftr_Classifier(product_database_dir=root,
+                                  product_database_path=f"{root}/product_database.csv")
+
+    for idx, bbox in tqdm(enumerate(bbox_list), total=len(bbox_list)):
+        # label file
+        gt_prod_id = [row.product_id for idx, row in gt_prod_id_elements.iterrows() if
+                      there_is_intersection(bbox, [[row.y1, row.x1], [row.y2, row.x2]])]
+        if len(gt_prod_id) == 0:
+            # print(f"bbox idx {idx} Cannot find ground truth product id")
+            continue
+        ##########################
+
+        #########################
+        y_min, y_max, x_min, x_max = ProductIdentificationApp._get_rectangle_top_bottom(bbox)
+        y_min = max(0, y_min)
+        y_max = min(H - 1, y_max)
+        x_min = max(0, x_min)
+        x_max = min(W - 1, x_max)
+        bbox_image = image[y_min:y_max, x_min:x_max]
+        #product = classifier.run_inferece(bbox_image)
+        product_name, image_template = classifier.predict(bbox_image)
+        product_image  = cv.imread(image_template)
+        h_p = H // p_f
+        w_p = W // p_f
+        product_global_image = np.zeros_like(image)
+        if product_name:
+            product_image = resize_image_using_pil_lib(product_image, h_p, w_p)
+            h_p, w_p, _ = product_image.shape
+            product_global_image[:h_p, :w_p] = product_image
+
+        bbox_global_image = np.zeros_like(image)
+        bbox_global_image[y_min:y_max, x_min:x_max] = bbox_image
+
+        # concatenate images
+        aux_image = np.concatenate([image, bbox_global_image, product_global_image], axis=1)
+        output_path = output_dir / f"output_{idx}.jpg"
+        cv.imwrite(output_path, resize_image_using_pil_lib(aux_image, 800, 800))
+
+        gt_prod_id = gt_prod_id[0]
+        if product_name and product_name == gt_prod_id:
+            print(f"Product {product_name} was correctly identified")
+            debug_image[y_min:y_max, x_min:x_max, 1] = 125
+        else:
+            print(f"Product {product_name} was not correctly identified as {gt_prod_id}")
+            debug_image[y_min:y_max, x_min:x_max, 2] = 125
+
+    cv.imwrite(output_dir / "debug.jpg", debug_image)
+
+    return
 
 
 
 if __name__ == "__main__":
-    test_classifier()
+    #test_classifier()
+    evaluate_classifier()
 
 
 

@@ -61,6 +61,7 @@ class ProductIdentificationApp:
         #matplotlib.use('WebAgg')
         matplotlib.use('TkAgg')
         #display matplotlib windows in browser
+        #plt.close('all')
         self.figp = None
         self.fig = None
 
@@ -127,10 +128,12 @@ class ProductIdentificationApp:
 
         self.show_product()
         self.product_bbox_annotations = []
-        #self.__build_ui()
-        image_to_display = self._draw_bbox_annotations()
-        self.ax.imshow(image_to_display)
-        plt.draw()
+        self.__build_ui()
+        plt.show()
+
+        #image_to_display = self._draw_bbox_annotations()
+        #self.ax.imshow(image_to_display)
+        #plt.draw()
 
 
 
@@ -148,13 +151,15 @@ class ProductIdentificationApp:
         if self.product_path is None:
             return
 
+        plt.close('all')
+
         image = cv.imread(self.product_path)
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         if self.figp is not None:
             plt.close(self.figp)
         self.figp, self.axp = plt.subplots()
         self.axp.imshow(image)
-        plt.show()
+        #plt.show()
 
     def onclick(self, event):
         print("click")
@@ -239,9 +244,16 @@ class ProductIdentificationApp:
         df["y2"] = df["y2"].apply(lambda x: min(H -1, x))
         df["y1"] = df["y1"].apply(lambda x: min(H - 1, x))
 
+        #remove duplicated rows
+        df = df.drop_duplicates()
+
         if Path(self.output_file).exists():
             #df.to_csv(self.output_file, mode='a', header=False, index=False)
             df.to_csv(self.output_file, mode='a', header=False, index=False)
+            #remove duplicates if exists
+            df = pd.read_csv(self.output_file)
+            df = df.drop_duplicates()
+            df.to_csv(self.output_file, index=False)
 
         else:
             df.to_csv(self.output_file, index=False)
