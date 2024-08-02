@@ -28,3 +28,11 @@ python product_annotation.py --image_path DATASETPATH/fotos de pdv/WhatsApp Imag
 
 ```
 
+
+### Create environment
+
+```bash
+conda create -n conaprole python=3.7
+pip install kornia
+pip install opencv-python
+```
