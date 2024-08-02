@@ -54,7 +54,7 @@ check_command_result() {
 
 #check_command_result mkdir -p $NODE_DATASET_DIR
 #check_command_result mkdir -p $NODE_RESULTADOS_DIR
-check_command_result mkdir -p $HOME_RESULTADOS_DIR
+#check_command_result mkdir -p $HOME_RESULTADOS_DIR
 
 ####Move dataset to node local disk
 #check_command_result cp  -r $HOME_DATASET_DIR $NODE_DATASET_DIR
