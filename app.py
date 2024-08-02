@@ -33,7 +33,7 @@ class Pipeline:
         self.debug = debug
         self.device = device
 
-        self.classifier_parameters = dict(product_database_dir="/data/ia_tech_conaprole/cluster/matcher_classifier_2",
+        self.classifier_parameters = dict(product_database_dir="/data/ia_tech_conaprole/cluster/matcher_classifier_four_products",
                                           feature_matcher=matcher,
                                           device=device)
 
@@ -42,8 +42,8 @@ class Pipeline:
     def load_yolov5_model(self, model_path):
         model = yolov5.load(model_path)
         # set model parameters
-        model.conf = 0.4  # NMS confidence threshold
-        model.iou = 0.45  # NMS IoU threshold
+        model.conf = 0.80  # NMS confidence threshold
+        model.iou = 0.40  # NMS IoU threshold
         model.agnostic = False  # NMS class-agnostic
         model.multi_label = False  # NMS multiple labels per box
         model.max_det = 1000  # maximum number of detections per image
@@ -126,8 +126,8 @@ class Pipeline:
                 cv2.imwrite(str(output_path), bbox_image)
 
     def classifier(self, image, boxes):
-        if self.device == Device.cuda:
-            return self.classifier_multiprocessing(image, boxes)
+        # if self.device == Device.cuda:
+        #     return self.classifier_multiprocessing(image, boxes)
 
         classifier = Matcher(**self.classifier_parameters).classifier
         product_name_list = []
@@ -184,4 +184,5 @@ if __name__ == "__main__":
     image_path = "./assets/WhatsApp Image 2024-05-24 at 12.00.13 (2).jpeg"
     #image_path = "./assets/IMG_9149.png"
     #image_path = "./assets/IMG_9156.png"
+    image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
     main(image_path)
