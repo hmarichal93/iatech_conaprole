@@ -1,10 +1,17 @@
 import cv2
-import yolov5
+#import yolov5
 
 from pathlib import Path
-
+import numpy as np
+import torch
 from weak_labelling import matcher
 from classifier import Device, Loftr_Classifier, Sift_Classifier
+from feature_matching import resize_image_using_pil_lib
+from PIL import Image
+
+from dob.yolov5.models.experimental import attempt_load
+from dob.yolov5.utils.general import non_max_suppression
+from dob.yolov5.utils.torch_utils import select_device
 
 class Matcher:
     def __init__(self, product_database_dir: str,
@@ -26,28 +33,37 @@ class Pipeline:
                     device=Device.cuda,
                     matcher=matcher.loftr_matcher,
                     debug=True,
-                    num_processes = 1 ):
+                    num_processes = 1,
+                    product_database_dir= "/data/ia_tech_conaprole/cluster/matcher_classifier_four_products"):
         self.model = self.load_yolov5_model(model_path)
         self.output_dir = output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
         self.device = device
 
-        self.classifier_parameters = dict(product_database_dir="/data/ia_tech_conaprole/cluster/matcher_classifier_four_products",
+        self.classifier_parameters = dict(product_database_dir= product_database_dir,
                                           feature_matcher=matcher,
                                           device=device)
 
         self.num_processes = num_processes
+        self.size = 640
+        self.conf_thres = 0.6
+        self.iou_thres = 0.45
+        self.score_th = 60
 
     def load_yolov5_model(self, model_path):
-        model = yolov5.load(model_path)
-        # set model parameters
-        model.conf = 0.80  # NMS confidence threshold
-        model.iou = 0.40  # NMS IoU threshold
-        model.agnostic = False  # NMS class-agnostic
-        model.multi_label = False  # NMS multiple labels per box
-        model.max_det = 1000  # maximum number of detections per image
-        model.size = 640  # image size
+        # model = yolov5.load(model_path)
+        # # set model parameters
+        # model.conf = 0.80  # NMS confidence threshold
+        # model.iou = 0.40  # NMS IoU threshold
+        # model.agnostic = False  # NMS class-agnostic
+        # model.multi_label = False  # NMS multiple labels per box
+        # model.max_det = 1000  # maximum number of detections per image
+        # model.size = 640  # image size
+        device = select_device('0' if torch.cuda.is_available() else 'cpu')
+        device = select_device('cpu')
+
+        model = attempt_load(model_path, device=device)
         return model
 
     def preprocess_image(self, image_path):
@@ -67,22 +83,62 @@ class Pipeline:
         return image
 
     def write_image(self, image):
-        output_path = f"{self.output_dir}/detection_{self.output_prefix}_nms_{self.model.conf}_iou_{self.model.iou}_size_{self.model.size}.png"
+        output_path = f"{self.output_dir}/detection_{self.output_prefix}_nms_{self.conf_thres}_iou_{self.iou_thres}_size_{self.size}.png"
         image_r = cv2.resize(image, (640, 640))
         image_r = cv2.cvtColor(image_r, cv2.COLOR_RGB2BGR)
         cv2.imwrite(output_path, image_r)
 
     def yolov5_inference(self, img):
-        results = self.model(img)
-        predictions = results.pred[0]
-        boxes = predictions[:, :4]  # x1, y1, x2, y2
-        scores = predictions[:, 4]
-        categories = predictions[:, 5]
+
+        device = select_device('0' if torch.cuda.is_available() else 'cpu')
+        device = select_device('cpu')
+
+        #image = Image.fromarray(img)
+        #shape = image.size
+        #image_r = image.resize((self.size, self.size))
+        Hi,Wi, _ = img.shape
+        img_r = resize_image_using_pil_lib(img, self.size, self.size)
+        Hf, Wf, _ = img_r.shape
+        #img = np.array(image_r)
+        img_r = img_r[:, :, ::-1].transpose(2, 0, 1)
+        img_r = np.ascontiguousarray(img_r)
+        img_r = torch.from_numpy(img_r).to(device)
+        img_r = img_r.float() / 255.0
+        img_r = img_r.unsqueeze(0)
+
+        # Run the YOLOv5 model on the image
+        pred = self.model(img_r)[0]
+        pred = non_max_suppression(pred, conf_thres=self.conf_thres, iou_thres=self.iou_thres)
+        # convert to numpy
+        pred = [x.detach().cpu().numpy() for x in pred]
+        # convert to int
+        pred = [x.astype(int) for x in pred]
+        # Post-process the output and draw bounding boxes on the image
+        boxes = []
+        confidences = []
+        class_ids = []
+        for det in pred:
+            if det is not None and len(det):
+                # Scale the bounding box coordinates to the original image size
+                det[:, [0,2]] = det[:, [0,2]] * Wi / Wf
+                det[:, [1,3]] = det[:, [1,3]] * Hi / Hf
+                for *xyxy, conf, cls in det:
+                    boxes.append(xyxy)
+                    confidences.append(conf.item())
+                    class_ids.append(int(cls.item()))
+
+        image = np.array(img)
+
+        # results = self.model(img)
+        # predictions = results.pred[0]
+        # boxes = predictions[:, :4]  # x1, y1, x2, y2
+        # scores = predictions[:, 4]
+        # categories = predictions[:, 5]
 
         # show detection bounding boxes on image
         #results.show()
         if self.debug:
-            image = self.draw_bounding_boxes(img.copy(), boxes)
+            image = self.draw_bounding_boxes(image.copy(), boxes)
             self.write_image(image)
 
         return boxes
@@ -140,12 +196,16 @@ class Pipeline:
             if product_name is None:
                 continue
 
+            if score < self.score_th:
+                continue
+
             product_name_list.append(product_name)
 
             if self.debug:
                 output_dir = self.output_dir / product_name
                 output_dir.mkdir(parents=True, exist_ok=True)
-                output_path = output_dir / f"{prefix}_{int(score)}.png"
+                output_path = output_dir / f"{prefix}_{int(score*100)}.png"
+                print(f"Product Name: {product_name} Ratio Inference: ", score)
                 bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(str(output_path), bbox_image)
 
@@ -153,7 +213,7 @@ class Pipeline:
 
 
 
-    def compute_metrics(self):
+    def compute_metrics(self, res):
 
         pass
 
@@ -174,7 +234,6 @@ class Pipeline:
 
 
 def main(image_path):
-
     pipeline = Pipeline()
     pipeline.main(image_path)
 
@@ -182,7 +241,8 @@ def main(image_path):
 
 if __name__ == "__main__":
     image_path = "./assets/WhatsApp Image 2024-05-24 at 12.00.13 (2).jpeg"
-    #image_path = "./assets/IMG_9149.png"
+    image_path = "./assets/IMG_9149.png"
     #image_path = "./assets/IMG_9156.png"
     image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
+    #image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
     main(image_path)

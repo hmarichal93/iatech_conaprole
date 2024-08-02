@@ -166,16 +166,37 @@ class Loftr_Classifier(Classifier):
             return 0
         try:
             #to = time.time()
-            Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
-            inliers = inliers > 0
+            #Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+            #inliers = inliers > 0
             #tf = time.time()
             #print(f"Time: {tf - to}")
+            #minimum_matches = np.minimum(mkpts0.shape[0], mkpts1.shape[0])
+            #ratio_inliers = inliers.sum() / minimum_matches
+            H, inliers = cv2.findHomography(mkpts0, mkpts1, cv2.USAC_MAGSAC)
+            if H is None:
+                return 0
+            #check if H is a translation matrix with an epsilon error
+            epsilon = 1
+            H_aux = np.zeros_like(H)
+            H_aux[0,0] = H[0,0]
+            H_aux[1,1] = H[1,1]
+            H_aux[2,2] = H[2,2]
+            error = np.sum((np.eye(3)-H_aux)**2)
+            if error > epsilon:
+                #It is not a pure translation
+                print(error)
+                return 0
+            inliers = inliers > 0
+
         except cv2.error as e:
             inliers = []
+            ratio_inliers = 0
+            error = 0
             pass
 
 
         return len(inliers)
+        #return
 
 
 class Sift_Classifier(Classifier):
@@ -227,8 +248,19 @@ class Sift_Classifier(Classifier):
         if mkpts0.shape[0] < 4:
             return 0
         try:
-            Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+            #Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+            #findHomography
+            H, inliers = cv2.findHomography(mkpts0, mkpts1, cv2.USAC_MAGSAC)
+            mkpts0 = cv2.perspectiveTransform(mkpts0[inliers], H)
+            mkpts1 = mkpts1[inliers]
+            #compute error rmse
+            error = np.sqrt(np.sum((mkpts0 - mkpts1) ** 2) / mkpts0.shape[0])
+
             inliers = inliers > 0
+            #transform mkpts with homography
+            #compute rmse error
+
+
         except cv2.error as e:
             inliers = []
             pass
