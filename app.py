@@ -1,9 +1,4 @@
-#import streamlit as st
-from PIL import Image
-import torch
 import cv2
-import numpy as np
-import supervision as sv
 import yolov5
 
 from pathlib import Path
