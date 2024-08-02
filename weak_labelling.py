@@ -83,12 +83,12 @@ if __name__ == "__main__":
     import argparse
     # add device as argument
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", type=int, default = Device.cpu)
+    parser.add_argument("--device", type=int, default = Device.cuda)
     #add matcher as argument. By defult loftr
     parser.add_argument("--matcher", type=int, default = matcher.loftr_matcher)
     #add root dataset
-    parser.add_argument("--root", type=str, default = "/data/ia_tech_conaprole")
-    parser.add_argument("--product_database_dir", type=str, default = "")
+    parser.add_argument("--root", type=str, default = "/data/ia_tech_conaprole/cluster")
+    parser.add_argument("--product_database_dir", type=str, default = "/data/ia_tech_conaprole/cluster/matcher_classifier_2")
     args = parser.parse_args()
 
     main(args.device, args.matcher, args.root, args.product_database_dir)
