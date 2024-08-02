@@ -7,21 +7,42 @@ import supervision as sv
 import yolov5
 
 from pathlib import Path
+
+from weak_labelling import matcher
+from classifier import Device, Loftr_Classifier, Sift_Classifier
+
+class Matcher:
+    def __init__(self, product_database_dir: str,
+                 feature_matcher = matcher.loftr_matcher,
+                 device=Device.cpu):
+        if feature_matcher == matcher.loftr_matcher:
+            print("Using loftr")
+            classifier = Loftr_Classifier(product_database_dir=product_database_dir,
+                                          product_database_path=f"{product_database_dir}/product_database.csv",
+                                          device=device)
+        else:
+            print("Using sift")
+            classifier = Sift_Classifier()
+        self.classifier = classifier
+
 class Pipeline:
     def __init__(self, model_path='/data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt',
                     output_dir="./results",
                     device=None,
-                    matcher=None,
+                    matcher=matcher.loftr_matcher,
                     debug=True):
         self.model = self.load_yolov5_model(model_path)
         self.output_dir = output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
+        self.classifier_parameters = dict(product_database_dir="/data/ia_tech_conaprole/cluster/matcher_classifier_2",
+                                          feature_matcher=matcher,
+                                          device=Device.cuda)
 
     def load_yolov5_model(self, model_path):
         model = yolov5.load(model_path)
         # set model parameters
-        model.conf = 0.25  # NMS confidence threshold
+        model.conf = 0.4  # NMS confidence threshold
         model.iou = 0.45  # NMS IoU threshold
         model.agnostic = False  # NMS class-agnostic
         model.multi_label = False  # NMS multiple labels per box
@@ -46,7 +67,7 @@ class Pipeline:
         return image
 
     def write_image(self, image):
-        output_path = f"results/detection_{self.output_prefix}_nms_{self.model.conf}_iou_{self.model.iou}_size_{self.model.size}.png"
+        output_path = f"{self.output_dir}/detection_{self.output_prefix}_nms_{self.model.conf}_iou_{self.model.iou}_size_{self.model.size}.png"
         image_r = cv2.resize(image, (640, 640))
         image_r = cv2.cvtColor(image_r, cv2.COLOR_RGB2BGR)
         cv2.imwrite(output_path, image_r)
@@ -68,7 +89,29 @@ class Pipeline:
 
     def classifier(self, image, boxes):
 
-        pass
+        classifier = Matcher(**self.classifier_parameters).classifier
+        product_name_list = []
+        for box in boxes:
+            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            bbox_image = image[y1:y2, x1:x2]
+            prefix = f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}"
+            product_name, _ , score = classifier.predict(bbox_image, prefix)
+            if product_name is None:
+                continue
+
+            product_name_list.append(product_name)
+
+            if self.debug:
+                output_dir = self.output_dir / product_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{prefix}_{int(score)}.png"
+                bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(str(output_path), bbox_image)
+
+        return product_name_list
+
+
 
     def compute_metrics(self):
         pass
@@ -77,11 +120,14 @@ class Pipeline:
         pass
 
     def main(self, image_path):
+        self.output_dir = Path(self.output_dir) / Path(image_path).stem
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.output_prefix = Path(image_path).stem
+
         image = self.preprocess_image(image_path)
         boxes = self.yolov5_inference(image)
         res = self.classifier(image, boxes)
-        res = self.compute_metrics()
+        res = self.compute_metrics(res)
         self.print_metrics(res)
         return res
 
@@ -95,6 +141,6 @@ def main(image_path):
 
 if __name__ == "__main__":
     image_path = "./assets/WhatsApp Image 2024-05-24 at 12.00.13 (2).jpeg"
-    image_path = "./assets/IMG_9149.png"
-    image_path = "./assets/IMG_9156.png"
+    #image_path = "./assets/IMG_9149.png"
+    #image_path = "./assets/IMG_9156.png"
     main(image_path)
