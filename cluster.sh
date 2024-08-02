@@ -71,7 +71,7 @@ python weak_labelling.py --device 0 --root /clusteruy/home/henry.marichal/ia_tec
 
 # -------------------------------------------------------
 #copy results to HOME
-mkdir -p $HOME_RESULTADOS_DIR
+#mkdir -p $HOME_RESULTADOS_DIR
 #cp -r $NODE_RESULTADOS_DIR/* $HOME_RESULTADOS_DIR
 #cp -r $NODE_DATASET_DIR/* $HOME_RESULTADOS_DIR
 #delete temporal files
