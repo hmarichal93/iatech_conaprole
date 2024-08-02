@@ -83,7 +83,7 @@ if __name__ == "__main__":
     import argparse
     # add device as argument
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", type=str, default = Device.cpu)
+    parser.add_argument("--device", type=int, default = Device.cpu)
     #add matcher as argument. By defult loftr
     parser.add_argument("--matcher", type=int, default = matcher.loftr_matcher)
     #add root dataset
