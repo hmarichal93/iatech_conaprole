@@ -13,6 +13,7 @@ import pandas as df
 from tqdm import tqdm
 
 import torch
+import time
 
 class Product:
     def __init__(self, name, images_list):
@@ -148,17 +149,21 @@ class Loftr_Classifier(Classifier):
             "image1": K.color.rgb_to_grayscale(img2),
         }
         #matches = self.matcher(input_dict)
-
+        #to = time.time()
         with torch.inference_mode():
             correspondences = self.matcher(input_dict)
-
+        #tf = time.time()
+        #print(f"Time: {tf - to}")
         mkpts0 = correspondences["keypoints0"].cpu().numpy()
         mkpts1 = correspondences["keypoints1"].cpu().numpy()
         if mkpts0.shape[0] < 4:
             return 0
         try:
+            #to = time.time()
             Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
             inliers = inliers > 0
+            #tf = time.time()
+            #print(f"Time: {tf - to}")
         except cv2.error as e:
             inliers = []
             pass
