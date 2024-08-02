@@ -22,8 +22,8 @@ conda activate iatech
 # -------------------------------------------------------
 #disco local SSD local al nodo. /clusteruy/home/henry.marichal se accede via NFS (puede ser realmente lento)
 #el espacio local a utilizar se reserva dcon --tmp=XXXGb
-ROOT_DIR=$2
-HOME_RESULTADOS_DIR=$3
+ROOT_DIR=$1
+HOME_RESULTADOS_DIR=$2
 
 # -------------------------------------------------------
 #other variables
