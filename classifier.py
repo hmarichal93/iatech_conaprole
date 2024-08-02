@@ -135,13 +135,19 @@ class Loftr_Classifier(Classifier):
         image_2_path = "/tmp/image2.png"
         cv2.imwrite(image_2_path, image2)
 
-        image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...].cpu()
-        image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...].cpu()
-        img1 = K.geometry.resize(image1, (480, 640), antialias=True)
-        img2 = K.geometry.resize(image2, (480, 640), antialias=True)
+
         if self.device == Device.cuda:
+            image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...]
+            image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...]
+            img1 = K.geometry.resize(image1, (480, 640), antialias=True)
+            img2 = K.geometry.resize(image2, (480, 640), antialias=True)
             img1 = img1.cuda()
             img2 = img2.cuda()
+        else:
+            image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...].cpu().numpy()
+            image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...].cpu().numpy()
+            img1 = K.geometry.resize(image1, (480, 640), antialias=True).cpu().numpy()
+            img2 = K.geometry.resize(image2, (480, 640), antialias=True).cpu().numpy()
 
         # compute the matches
         input_dict = {
