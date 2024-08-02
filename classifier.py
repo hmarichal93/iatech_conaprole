@@ -126,6 +126,8 @@ class Loftr_Classifier(Classifier):
 
     def compute_similarity(self, image1, image2):
         """Compute matching score between two images using LoFTR."""
+        if image1 is None or image2 is None:
+            return 0
         #convert numpy array to tensor
         image_1_path = "/tmp/image1.png"
         cv2.imwrite(image_1_path, image1)
