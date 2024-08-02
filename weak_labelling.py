@@ -23,12 +23,14 @@ class WeakLabelling:
         self.images_dir = images_dir
         self.output_dir = output_dir
         if feature_matcher == matcher.loftr_matcher:
+            print("Using loftr")
             root = "/data/ia_tech_conaprole/dataset/matcher_classifier_2"
             root = "/data/ia_tech_conaprole/dataset/matcher_classifier_3"
             classifier = Loftr_Classifier(product_database_dir=root,
                                           product_database_path=f"{root}/product_database.csv",
                                           device=device)
         else:
+            print("Using sift")
             classifier = Sift_Classifier()
         self.classifier = classifier
 
@@ -68,17 +70,24 @@ class WeakLabelling:
 
         return
 
-def main():
+def main(device, matcher):
     root = "/data/ia_tech_conaprole"
     annotations_dir = root / Path("dataset/modified")
     images_dir = root / Path("dataset/fotos de pdv")
     output_dir = root / Path("output/weak_labelling_logo")
     output_dir.mkdir(parents=True, exist_ok=True)
-    weak_labelling = WeakLabelling(annotations_dir, images_dir, output_dir)
+    weak_labelling = WeakLabelling(annotations_dir, images_dir, output_dir, device = device, feature_matcher = matcher)
     weak_labelling.weak_labelling()
     return
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    # add device as argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", type=str, default = Device.cpu)
+    #add matcher as argument. By defult loftr
+    parser.add_argument("--matcher", type=int, default = matcher.loftr_matcher)
+    args = parser.parse_args()
+    main(args.device, args.matcher)
 
 
