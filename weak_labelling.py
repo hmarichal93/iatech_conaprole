@@ -17,6 +17,7 @@ class WeakLabelling:
     To each bounding box within each image a category is assigned. The category is determined by Loftr_Classifier.
     """
     def __init__(self, annotations_dir: str, images_dir: str, output_dir: str,
+                 product_database_dir: str,
                  feature_matcher = matcher.loftr_matcher,
                  device=Device.cpu):
         self.annotations_dir = annotations_dir
@@ -24,10 +25,8 @@ class WeakLabelling:
         self.output_dir = output_dir
         if feature_matcher == matcher.loftr_matcher:
             print("Using loftr")
-            root = "/data/ia_tech_conaprole/dataset/matcher_classifier_2"
-            root = "/data/ia_tech_conaprole/dataset/matcher_classifier_3"
-            classifier = Loftr_Classifier(product_database_dir=root,
-                                          product_database_path=f"{root}/product_database.csv",
+            classifier = Loftr_Classifier(product_database_dir=product_database_dir,
+                                          product_database_path=f"{product_database_dir}/product_database.csv",
                                           device=device)
         else:
             print("Using sift")
@@ -70,13 +69,13 @@ class WeakLabelling:
 
         return
 
-def main(device, matcher):
-    root = "/data/ia_tech_conaprole"
-    annotations_dir = root / Path("dataset/modified")
-    images_dir = root / Path("dataset/fotos de pdv")
-    output_dir = root / Path("output/weak_labelling_logo")
+def main(device, matcher, root="/data/ia_tech_conaprole/cluster", product_database_dir=""):
+    annotations_dir = root / Path("annotations")
+    images_dir = root / Path("images")
+    output_dir = root / Path("output/weak_labelling")
     output_dir.mkdir(parents=True, exist_ok=True)
-    weak_labelling = WeakLabelling(annotations_dir, images_dir, output_dir, device = device, feature_matcher = matcher)
+    weak_labelling = WeakLabelling(annotations_dir, images_dir, output_dir, product_database_dir,
+                                   device = device, feature_matcher = matcher)
     weak_labelling.weak_labelling()
     return
 
@@ -87,7 +86,11 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default = Device.cpu)
     #add matcher as argument. By defult loftr
     parser.add_argument("--matcher", type=int, default = matcher.loftr_matcher)
+    #add root dataset
+    parser.add_argument("--root", type=str, default = "/data/ia_tech_conaprole")
+    parser.add_argument("--product_database_dir", type=str, default = "")
     args = parser.parse_args()
-    main(args.device, args.matcher)
+
+    main(args.device, args.matcher, args.root, args.product_database_dir)
 
 
