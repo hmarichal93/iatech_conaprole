@@ -28,16 +28,21 @@ class Matcher:
 class Pipeline:
     def __init__(self, model_path='/data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt',
                     output_dir="./results",
-                    device=None,
+                    device=Device.cuda,
                     matcher=matcher.loftr_matcher,
-                    debug=True):
+                    debug=True,
+                    num_processes = 1 ):
         self.model = self.load_yolov5_model(model_path)
         self.output_dir = output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
+        self.device = device
+
         self.classifier_parameters = dict(product_database_dir="/data/ia_tech_conaprole/cluster/matcher_classifier_2",
                                           feature_matcher=matcher,
-                                          device=Device.cuda)
+                                          device=device)
+
+        self.num_processes = num_processes
 
     def load_yolov5_model(self, model_path):
         model = yolov5.load(model_path)
@@ -87,7 +92,47 @@ class Pipeline:
 
         return boxes
 
+    @staticmethod
+    def classify_box(classifier, image, box):
+        x1, y1, x2, y2 = box
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        bbox_image = image[y1:y2, x1:x2]
+        product_name, _, score = classifier.predict(bbox_image)
+        if product_name is None:
+            return None
+
+        return product_name
+
+    def classifier_multiprocessing(self, image, boxes):
+        #from multiprocessing import Pool, freeze_support
+        import torch.multiprocessing as mp
+        mp.set_start_method('spawn')
+
+        classifier = Matcher(**self.classifier_parameters).classifier
+        product_name_list = []
+        #freeze_support()
+
+        with mp.Pool(processes=self.num_processes) as pool:
+             product_name_list = pool.starmap(self.classify_box, [(classifier, image, box) for box in boxes])
+        #     #product_name_list = [product_name for product_name in product_name_list if product_name is not None]
+
+
+        for product_name, bbox in zip(product_name_list, boxes):
+            if product_name is None:
+                continue
+            x1, y1, x2, y2 = bbox
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            if self.debug:
+                output_dir = self.output_dir / product_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}.png"
+                bbox_image = image[y1:y2, x1:x2]
+                bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(str(output_path), bbox_image)
+
     def classifier(self, image, boxes):
+        if self.device == Device.cuda:
+            return self.classifier_multiprocessing(image, boxes)
 
         classifier = Matcher(**self.classifier_parameters).classifier
         product_name_list = []
