@@ -116,9 +116,11 @@ class Loftr_Classifier(Classifier):
     def __init__(self, product_database_path=None, product_database_dir=None, device = Device.cuda ):
         super().__init__(product_database_path, product_database_dir)
         if device == Device.cuda:
+            print("Using cuda")
             self.matcher =  LoFTR(pretrained="indoor_new").cuda()
         else:
-            self.matcher =  LoFTR(pretrained="indoor_new")#.cuda()
+            print("Using cpu")
+            self.matcher =  LoFTR(pretrained="indoor_new")
 
         self.device = device
 
