@@ -93,6 +93,7 @@ class Classifier(ABC):
         best_image_template = None
         for idx, row in tqdm(self.df_products.iterrows(),desc=f"Predicting-{image_name}", total=self.df_products.shape[0]):
             image_template_path = row.image_path
+
             image_template = cv.imread(image_template_path)
             #compute the similarity
             similarity = self.compute_similarity(image, image_template)
@@ -108,10 +109,18 @@ import kornia.feature as KF
 import kornia as K
 from kornia_moons.viz import draw_LAF_matches
 
+class Device:
+    cuda = 0
+    cpu = 1
 class Loftr_Classifier(Classifier):
-    def __init__(self, product_database_path=None, product_database_dir=None):
+    def __init__(self, product_database_path=None, product_database_dir=None, device = Device.cuda ):
         super().__init__(product_database_path, product_database_dir)
-        self.matcher =  LoFTR(pretrained="indoor_new").cuda()
+        if device == Device.cuda:
+            self.matcher =  LoFTR(pretrained="indoor_new").cuda()
+        else:
+            self.matcher =  LoFTR(pretrained="indoor_new")#.cuda()
+
+        self.device = device
 
     def compute_similarity(self, image1, image2):
         """Compute matching score between two images using LoFTR."""
@@ -123,9 +132,11 @@ class Loftr_Classifier(Classifier):
 
         image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...]
         image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...]
-
-        img1 = K.geometry.resize(image1, (480, 640), antialias=True).cuda()
-        img2 = K.geometry.resize(image2, (480, 640), antialias=True).cuda()
+        img1 = K.geometry.resize(image1, (480, 640), antialias=True)
+        img2 = K.geometry.resize(image2, (480, 640), antialias=True)
+        if self.device == Device.cuda:
+            img1 = img1.cuda()
+            img2 = img2.cuda()
 
         # compute the matches
         input_dict = {
@@ -147,29 +158,7 @@ class Loftr_Classifier(Classifier):
         except cv2.error as e:
             inliers = []
             pass
-        ##
-        # draw_LAF_matches(
-        #     KF.laf_from_center_scale_ori(
-        #         torch.from_numpy(mkpts0).view(1, -1, 2),
-        #         torch.ones(mkpts0.shape[0]).view(1, -1, 1, 1),
-        #         torch.ones(mkpts0.shape[0]).view(1, -1, 1),
-        #     ),
-        #     KF.laf_from_center_scale_ori(
-        #         torch.from_numpy(mkpts1).view(1, -1, 2),
-        #         torch.ones(mkpts1.shape[0]).view(1, -1, 1, 1),
-        #         torch.ones(mkpts1.shape[0]).view(1, -1, 1),
-        #     ),
-        #     torch.arange(mkpts0.shape[0]).view(-1, 1).repeat(1, 2),
-        #     K.tensor_to_image(img1),
-        #     K.tensor_to_image(img2),
-        #     inliers,
-        #     draw_dict={
-        #         "inlier_color": (0.2, 1, 0.2),
-        #         "tentative_color": (1.0, 0.5, 1),
-        #         "feature_color": (0.2, 0.5, 1),
-        #         "vertical": False,
-        #     },
-        # )
+
 
         return len(inliers)
 
@@ -404,7 +393,8 @@ def evaluate_classifier(image_target_dir="./assets/IMG_9140"):
     #instantiate classifier
     root = "/data/ia_tech_conaprole/dataset/matcher_classifier"
     classifier = Loftr_Classifier(product_database_dir=root,
-                                  product_database_path=f"{root}/product_database.csv")
+                                  product_database_path=f"{root}/product_database.csv",
+                                  device=Device.cpu)
 
     for idx, bbox in tqdm(enumerate(bbox_list), total=len(bbox_list)):
         # label file
@@ -422,7 +412,6 @@ def evaluate_classifier(image_target_dir="./assets/IMG_9140"):
         x_min = max(0, x_min)
         x_max = min(W - 1, x_max)
         bbox_image = image[y_min:y_max, x_min:x_max]
-        #product = classifier.run_inferece(bbox_image)
         product_name, image_template = classifier.predict(bbox_image)
         product_image  = cv.imread(image_template)
         h_p = H // p_f
