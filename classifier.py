@@ -54,9 +54,8 @@ class Classifier(ABC):
                 continue
 
             product_name = product_dir.name
-            images = []
-            for file_extension in file_extension:
-                images += list(product_dir.rglob(f"*{file_extension}"))
+            images = list(product_dir.rglob(f"*.*"))
+
 
             product = Product(product_name, images)
             products.append(product)
@@ -66,8 +65,16 @@ class Classifier(ABC):
         for product in products:
             #df = df.append(product.get_dataframe(), ignore_index=True)
             #using df.loc for appending df
-            for idx, row in product.get_dataframe().iterrows():
-                df.loc[df.shape[0]] = [row['name'], row.image_path]
+            data = {'name': product.get_dataframe().name.values.tolist(),
+                    'image_path': product.get_dataframe().image_path.values.tolist()}
+            df_product = pd.DataFrame(data)
+            #concatenate dataframes df and df_product
+            if df_product.shape[0] == 0:
+                print(f"Product {product.name} has no images")
+                continue
+            df = pd.concat([df, df_product], axis=0)
+            #for idx, row in product.get_dataframe().iterrows():
+            #    df.loc[df.shape[0]] = [row['name'], row.image_path]
 
         df.to_csv(product_database_path, index=False)
         return
@@ -80,11 +87,11 @@ class Classifier(ABC):
         """
         pass
 
-    def predict(self, image):
+    def predict(self, image, image_name=None):
         best_similarity = 0
         best_product = None
         best_image_template = None
-        for idx, row in tqdm(self.df_products.iterrows(),desc="Predicting", total=self.df_products.shape[0]):
+        for idx, row in tqdm(self.df_products.iterrows(),desc=f"Predicting-{image_name}", total=self.df_products.shape[0]):
             image_template_path = row.image_path
             image_template = cv.imread(image_template_path)
             #compute the similarity
@@ -94,7 +101,7 @@ class Classifier(ABC):
                 best_product = row['name']
                 best_image_template = image_template_path
 
-        return best_product, best_image_template
+        return best_product, best_image_template, best_similarity
 
 from kornia.feature import LoFTR
 import kornia.feature as KF
@@ -165,6 +172,66 @@ class Loftr_Classifier(Classifier):
         # )
 
         return len(inliers)
+
+
+class Sift_Classifier(Classifier):
+    def __init__(self, product_database_path=None, product_database_dir=None):
+        super().__init__(product_database_path, product_database_dir)
+        self.matcher =  LoFTR(pretrained="indoor_new").cuda()
+
+    def compute_descriptors(self, image):
+        sift = cv.SIFT_create()
+        kp, des = sift.detectAndCompute(image, None)
+
+        # surf = cv.xfeatures2d.SURF_create(400)
+        # kp, des = surf.detectAndCompute(image, None)
+
+        return kp, des
+    def compute_similarity(self, image1, image2):
+        """Compute matching score between two images using LoFTR."""
+        kp1, des1 = self.compute_descriptors(image1)
+        kp2, des2 = self.compute_descriptors(image2)
+        bf = cv.BFMatcher()
+        best_match = None
+        best_match_score = 0
+        matches = bf.knnMatch(des1, des2, k=2)
+
+        #convert numpy array to tensor
+        image_1_path = "/tmp/image1.png"
+        cv2.imwrite(image_1_path, image1)
+        image_2_path = "/tmp/image2.png"
+        cv2.imwrite(image_2_path, image2)
+
+        image1 = K.io.load_image(image_1_path, K.io.ImageLoadType.RGB32)[None, ...]
+        image2 = K.io.load_image(image_2_path, K.io.ImageLoadType.RGB32)[None, ...]
+
+        img1 = K.geometry.resize(image1, (480, 640), antialias=True).cuda()
+        img2 = K.geometry.resize(image2, (480, 640), antialias=True).cuda()
+
+        # compute the matches
+        input_dict = {
+            "image0": K.color.rgb_to_grayscale(img1),  # LofTR works on grayscale images only
+            "image1": K.color.rgb_to_grayscale(img2),
+        }
+        #matches = self.matcher(input_dict)
+
+        with torch.inference_mode():
+            correspondences = self.matcher(input_dict)
+
+        mkpts0 = correspondences["keypoints0"].cpu().numpy()
+        mkpts1 = correspondences["keypoints1"].cpu().numpy()
+        if mkpts0.shape[0] < 4:
+            return 0
+        try:
+            Fm, inliers = cv2.findFundamentalMat(mkpts0, mkpts1, cv2.USAC_MAGSAC, 0.5, 0.999, 100000)
+            inliers = inliers > 0
+        except cv2.error as e:
+            inliers = []
+            pass
+
+
+        return len(inliers)
+
 
 
 
@@ -251,23 +318,24 @@ def test_classifier():
     image_path = "assets/WhatsApp Image 2024-05-29 at 09.01.16 (3)/WhatsApp Image 2024-05-29 at 09.01.16 (3).jpeg"
     image_path = "assets/WhatsApp Image 2024-05-27 at 11.44.47/WhatsApp Image 2024-05-27 at 11.44.47.jpeg"
     image_path = "./assets/WhatsApp Image 2024-05-27 at 12.50.35 (1)/WhatsApp Image 2024-05-27 at 12.50.35 (1).jpeg"
-    image_path = "./assets/IMG_9140/IMG_9140.png"
+    #image_path = "./assets/IMG_9140/IMG_9140.png"
     output_dir = Path(image_path).parent / "output"
     gt_prod_id_file = Path(image_path).parent / "annotations.csv"
     gt_prod_id_elements = df.read_csv(gt_prod_id_file)
     output_dir.mkdir(parents=True, exist_ok=True)
-    image = cv.imread(image_path
-                      )
+    image = cv.imread(image_path)
     H, W, _ = image.shape
     p_f = 10
     #extract bounding boxes
     image_path = Path(image_path)
     bbox_annotation_dir = "/data/ia_tech_conaprole/dataset/modified"
-    bbox_annotation_dir = "./assets/IMG_9140/"
+    #bbox_annotation_dir = "./assets/IMG_9140/"
     annotation_name = str(image_path.stem).replace(" ", "_") + "_modified.json"
     bbox_annotation_path = f"{bbox_annotation_dir}/{annotation_name}"
     bbox_list = AisleProductMatcher.load_labelme_rectangle_shapes(bbox_annotation_path)
     debug_image = image.copy()
+    import time
+    to = time.time()
     for idx, bbox in tqdm(enumerate(bbox_list), total=len(bbox_list)):
         #label file
         gt_prod_id = [row.product_id for idx, row in gt_prod_id_elements.iterrows() if there_is_intersection(bbox, [[row.y1, row.x1], [row.y2, row.x2]])]
@@ -309,22 +377,26 @@ def test_classifier():
             debug_image[y_min:y_max, x_min:x_max, 2] = 125
 
     cv.imwrite(output_dir / "debug.jpg", debug_image)
-
+    print(f"Time: {time.time() - to}")
     return
 
 def evaluate_classifier(image_target_dir="./assets/IMG_9140"):
+    image_target_dir = "./assets/WhatsApp Image 2024-05-27 at 12.50.35 (1)/"
+    image_target_dir = "assets/WhatsApp Image 2024-05-27 at 11.44.47/"
     image_target_dir = Path(image_target_dir)
     output_dir = image_target_dir / "output"
     gt_prod_id_file = image_target_dir / "annotations.csv"
     gt_prod_id_elements = df.read_csv(gt_prod_id_file)
     output_dir.mkdir(parents=True, exist_ok=True)
-    image_path = next(image_target_dir.glob("*.png"))
+    image_path = next(image_target_dir.glob("*.jpeg"))
     image = cv.imread(image_path
                       )
     H, W, _ = image.shape
     p_f = 10
     # extract bounding boxes
     bbox_annotation_dir = image_target_dir
+    bbox_annotation_dir = Path("/data/ia_tech_conaprole/dataset/modified")
+
     annotation_name = str(image_path.stem).replace(" ", "_") + "_modified.json"
     bbox_annotation_path = f"{bbox_annotation_dir}/{annotation_name}"
     bbox_list = AisleProductMatcher.load_labelme_rectangle_shapes(bbox_annotation_path)
@@ -380,6 +452,9 @@ def evaluate_classifier(image_target_dir="./assets/IMG_9140"):
     cv.imwrite(output_dir / "debug.jpg", debug_image)
 
     return
+
+
+
 
 
 
