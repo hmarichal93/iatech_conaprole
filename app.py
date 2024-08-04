@@ -287,16 +287,21 @@ class Pipeline:
         return self.output_dir
 
 
-def main(image_path,conf_th=0.6, iou_th=0.4, debug=True):
-    pipeline = Pipeline(conf_th=conf_th, iou_th=iou_th,debug=debug)
+def main(image_path,conf_th=0.6, iou_th=0.4, debug=True, model_path=None):
+    pipeline = Pipeline(conf_th=conf_th, iou_th=iou_th,debug=debug, model_path=model_path)
     output_dir  = pipeline.main(image_path)
 
     return output_dir
 
 if __name__ == "__main__":
-    #image_path = "./assets/IMG_9149.png"
-    image_path = "./assets/IMG_9156.png"
-    #image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
-    image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
-    image_path = "images_for_demo/autml/IMG_9140.png"
-    main(image_path, debug=False)
+    import argparse
+    #image_path and model_path are the arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--image_path", type=str, default="images_for_demo/autml/IMG_9140.png")
+    parser.add_argument("--model_path", type=str, default="/data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt")
+    parser.add_argument("--conf_th", type=float, default=0.6)
+    parser.add_argument("--iou_th", type=float, default=0.4)
+    parser.add_argument("--debug", type=bool, default=True)
+
+    args = parser.parse_args()
+    main(args.image_path, args.conf_th, args.iou_th, args.debug, args.model_path)

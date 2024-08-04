@@ -7,7 +7,7 @@ from pathlib import Path
 
 from app import main as main_app
 
-def main():
+def main(model_path="weights/best.pt"):
     st.title("Demo IA CHallenge Conaprole Equipo 1")
 
 
@@ -30,13 +30,13 @@ def main():
         st.write("")
 
         st.write("Procesando imagen...")
-        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres)
+        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path)
 
         processed_image_path = Path(output_dir).glob("*detection*").__next__()
         processed_image = Image.open(processed_image_path)
 
         df_path = Path(output_dir).glob("*.html").__next__()
-        df = pd.read_html(df_path)[0]
+        df = pd.read_html(df_path, index_col=0)[0]
 
 
 
@@ -63,4 +63,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", type=str, default="weights/best.pt")
+    args = parser.parse_args()
+
+    main(args.model_path)
