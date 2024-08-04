@@ -8,6 +8,7 @@ from weak_labelling import matcher
 from classifier import Device, Loftr_Classifier, Sift_Classifier
 from feature_matching import resize_image_using_pil_lib
 from PIL import Image
+from  tqdm import tqdm
 
 from dob.yolov5.models.experimental import attempt_load
 from dob.yolov5.utils.general import non_max_suppression
@@ -26,6 +27,7 @@ class Matcher:
             print("Using sift")
             classifier = Sift_Classifier()
         self.classifier = classifier
+
 
 class Pipeline:
     def __init__(self, model_path='/data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt',
@@ -133,6 +135,7 @@ class Pipeline:
 
         return product_name
 
+
     def classifier_multiprocessing(self, image, boxes):
         #from multiprocessing import Pool, freeze_support
         import torch.multiprocessing as mp
@@ -160,10 +163,12 @@ class Pipeline:
                 bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(str(output_path), bbox_image)
 
-    def classifier(self, image, boxes):
-        classifier = Matcher(**self.classifier_parameters).classifier
+    def classifier(self, image, boxes, classifier_type="automl"):
+        from classifier import AutoML_Classifier
+        classifier = Matcher(**self.classifier_parameters).classifier if classifier_type != "automl" else AutoML_Classifier(default_dir=self.output_dir)
+
         product_name_list = []
-        for box in boxes:
+        for box in tqdm(boxes, desc="Classifying boxes"):
             x1, y1, x2, y2 = box
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
             bbox_image = image[y1:y2, x1:x2]
@@ -172,7 +177,10 @@ class Pipeline:
             if product_name is None:
                 continue
 
-            if score < self.score_th:
+            if score < self.score_th and classifier_type != "automl":
+                continue
+
+            if classifier_type == "automl" and score < self.conf_thres:
                 continue
 
             product_name_list.append(product_name)
@@ -181,7 +189,7 @@ class Pipeline:
                 output_dir = self.output_dir / product_name
                 output_dir.mkdir(parents=True, exist_ok=True)
                 output_path = output_dir / f"{prefix}_{int(score*100)}.png"
-                print(f"Product Name: {product_name} Ratio Inference: ", score)
+                #print(f"Product Name: {product_name} Ratio Inference: ", score)
                 bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(str(output_path), bbox_image)
 
@@ -196,8 +204,29 @@ class Pipeline:
 
         counter = Counter(res)
         df = pd.DataFrame(counter.items(), columns=["Product", "Frequency"])
+
+        #compuse share of space of each product. product_frequency / total_frequency
+        df["Share of Space"] = df["Frequency"] / df["Frequency"].sum()
+
+        #add row with product with Conaprole prefix frequency
+        conaprole_frequency = df[df["Product"].str.contains("Conaprole")]["Frequency"].sum()
+        conaprole_share = conaprole_frequency / df["Frequency"].sum()
+        #append using .loc method
+        df.loc[len(df)] = ["Conaprole", conaprole_frequency, conaprole_share]
+        #compute row with product withou Conaprole prefix frequency
+        others_frequency = df[~df["Product"].str.contains("Conaprole")]["Frequency"].sum()
+        others_share = others_frequency / df["Frequency"].sum()
+        df.loc[len(df)] = ["Others", others_frequency, others_share]
+        #multiply by 100 to get percentage
+        df["Share of Space"] = df["Share of Space"] * 100
+        #limit to 2 decimal places
+
+
+
         #save df as html
         self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
+        #share of space column only 2 decimal places
+        df["Share of Space"] = df["Share of Space"].apply(lambda x: round(x, 2))
         df.to_html(self.output_metrics_path)
         self.df_metrics = df
         return self.output_metrics_path
@@ -229,6 +258,6 @@ if __name__ == "__main__":
     image_path = "./assets/WhatsApp Image 2024-05-24 at 12.00.13 (2).jpeg"
     image_path = "./assets/IMG_9149.png"
     #image_path = "./assets/IMG_9156.png"
-    image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
+    #image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
     image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
     main(image_path)
