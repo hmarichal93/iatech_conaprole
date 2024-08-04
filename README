@@ -1,5 +1,11 @@
 Please do not push to master branch. Use develop branch instead :)
 
+### Dense-Object-Detection
+```bash
+git clone git@github.com:suryanshgupta9933/Dense-Object-Detection.git
+```
+
+
 ## Dataset
 Put your image set in the dataset folder. You can use a symbolic link to the actual location of the dataset.
 Use the following command to create a symbolic link:
@@ -41,4 +47,16 @@ pip install matplotlib
 pip install tqdm
 pip install kornia_moons
 pip install kornia_rs
+pip uninstall nvidia_cublas_cu11
+
+```
+
+### Connect to gcloud
+```bash
+gcloud auth application-default login
+```
+
+### Copy files to gcloud
+```bash
+gcloud compute scp --project conaprole --zone us-west1-b --recurse  /data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt  deeplearning-1-vm:~/iatech_conaprole
 ```
