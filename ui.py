@@ -13,10 +13,11 @@ def main(model_path="weights/best.pt"):
 
     conf_thres = st.slider("Confidence Threshold", 0.0, 1.0, 0.60, 0.05)
     iou_thres = st.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
+    #check box to select if you want to split the image in patches
+    split_image = st.checkbox("Split image in patches", value=False)
 
     # Subir imagen
     uploaded_file = st.file_uploader("Seleccionar una imagen...", type=["jpg", "jpeg", "png"])
-
     if uploaded_file is not None:
         print(uploaded_file)
         # Leer la imagen
@@ -30,7 +31,7 @@ def main(model_path="weights/best.pt"):
         st.write("")
 
         st.write("Procesando imagen...")
-        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path)
+        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path, split_image= split_image)
 
         processed_image_path = Path(output_dir).glob("*detection*").__next__()
         processed_image = Image.open(processed_image_path)

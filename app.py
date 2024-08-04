@@ -37,12 +37,11 @@ class Pipeline:
                     debug=True,
                     num_processes = 1,
                     product_database_dir= "/data/ia_tech_conaprole/cluster/matcher_classifier_four_products",
-                    conf_th=0.6, iou_th=0.45):
+                    conf_th=0.6, iou_th=0.45,
+                    split_image=False):
 
         self.output_dir = output_dir
-        if Path(self.output_dir).exists():
-            import os
-            os.system(f"rm -r {self.output_dir}")
+
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
         self.device = device
@@ -62,6 +61,7 @@ class Pipeline:
         self.conf_thres = conf_th
         self.iou_thres = iou_th
         self.score_th = 60
+        self.split_image = split_image
 
     def load_yolov5_model(self, model_path):
         model = attempt_load(model_path, device=self.yolo_device)
@@ -81,13 +81,18 @@ class Pipeline:
 
         return image
 
-    def write_image(self, image):
-        output_path = f"{self.output_dir}/detection_{self.output_prefix}_nms_{self.conf_thres}_iou_{self.iou_thres}_size_{self.size}.png"
-        image_r = cv2.resize(image, (640, 640))
+    def write_image(self, image, image_prefix=None):
+        if image_prefix is None:
+            output_path = f"{self.output_dir}/detection_{self.output_prefix}.png"
+        else:
+            output_path = f"{self.output_dir}/detection__{self.output_prefix}_{image_prefix}.png"
+
+        image_r = image#cv2.resize(image, (640, 640))
         image_r = cv2.cvtColor(image_r, cv2.COLOR_RGB2BGR)
+        print(output_path)
         cv2.imwrite(output_path, image_r)
 
-    def yolov5_inference(self, img):
+    def yolov5_inference(self, img, image_prefix=None):
 
         Hi,Wi, _ = img.shape
         img_r = resize_image_using_pil_lib(img, self.size, self.size)
@@ -124,7 +129,7 @@ class Pipeline:
 
         #if self.debug:
         image = self.draw_bounding_boxes(image.copy(), boxes)
-        self.write_image(image)
+        self.write_image(image, image_prefix=image_prefix)
 
         return boxes
 
@@ -272,14 +277,153 @@ class Pipeline:
     def print_metrics(self):
         print(self.df_metrics)
 
+    @staticmethod
+    def there_is_overlap(box1, box2):
+        from shapely.geometry import Polygon
+        x1, y1, x2, y2 = box1
+        box1 = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
+        x3, y3, x4, y4 = box2
+        box2 = Polygon([(x3, y3), (x4, y3), (x4, y4), (x3, y4)])
+        if box1.intersects(box2):
+            return True
+        return False
+
+    @staticmethod
+    def rectangles_intersect(rect1, rect2):
+        """
+        Check if two rectangles intersect.
+
+        Each rectangle is defined by a tuple (x1, y1, x2, y2) where:
+        (x1, y1) is the top-left corner
+        (x2, y2) is the bottom-right corner
+        """
+        x1_min, y1_min, x1_max, y1_max = rect1
+        x2_min, y2_min, x2_max, y2_max = rect2
+
+        # Check if one rectangle is to the left of the other
+        if x1_max < x2_min or x2_max < x1_min:
+            return False
+
+        # Check if one rectangle is above the other
+        if y1_max < y2_min or y2_max < y1_min:
+            return False
+
+        return True
+
+    @staticmethod
+    def compute_union_boxes(box, box_new):
+        "compute the union between both  boxes using shapely polygon"
+        from shapely.geometry import Polygon
+        x1, y1, x2, y2 = box
+        #get corner points of the box
+        box = [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+        box1_p = Polygon(box)
+        x3, y3, x4, y4 = box_new
+        box_new = [(x3, y3), (x4, y3), (x4, y4), (x3, y4)]
+
+        box2_p = Polygon(box_new)
+        if box1_p.area> box2_p.area:
+            return x1, y1, x2, y2
+        else:
+            return x3, y3, x4, y4
+        # union_box = box1_p.union(box2_p)
+        # x, y = union_box.exterior.coords.xy
+        # x_min, y_min = min(x), min(y)
+        # x_max, y_max = max(x), max(y)
+
+        # return x_min, y_min, x_max, y_max
+
+
+
+
+
+
+    def split_image_and_run_inference(self, image):
+        """
+        Split image in patches and run inference on each patch. Then merge the results
+        :param image:
+        :return:
+        """
+        #TODO fix bug in the intersection
+        #1.0 split image in patches with a factor of 0.25
+
+        Hi, Wi, _ = image.shape
+        num_patches = 2
+
+        patch_size_x = int(Wi / num_patches)
+        num_patches_x = num_patches# int(Wi / patch_size_x)
+        patch_size_y = int(Hi  / num_patches)
+        num_patches_y = num_patches #int(Hi / patch_size_y )
+        #overlapping
+        overlapping = 0.05
+        #split the image in patches
+        boxes_orig = []
+        image_debug = image.copy()
+        for i in range(num_patches_x):
+            x1 = int(i * patch_size_x * (1 - overlapping))
+            x2 = x1 + patch_size_x
+            x2 = min(x2, Wi - 1) #if i < num_patches_x - 1 else Wi -2
+            for j in range(num_patches_y):
+                y1 = int(j * patch_size_y * (1 - overlapping))
+                y2 = y1 + patch_size_y
+                y2 = min(y2, Hi - 1) #if j < num_patches_y - 1 else Hi -2
+                print(f"Processing patch {i} {j}. {x1=} {x2=} {y1=} {y2=}")
+
+                #y1 = min(y1,Hi)
+                patch = image[y1:y2, x1:x2]
+                #draw in image_debug rectangle of the patch
+                image_debug = cv2.rectangle(image_debug, (x1, y1), (x2, y2), (255, 0, 0), 3)
+                boxes = self.yolov5_inference(patch, image_prefix = f"{i}_{j}")
+                #revert the coordinate of the bboxes to the original
+                boxes = [[x1 + box[0], y1 + box[1], x1 + box[2], y1 + box[3]] for box in boxes]
+
+                if len(boxes_orig) == 0:
+                    boxes_orig.extend(boxes)
+                    continue
+                print("Checking overlapping")
+                boxes_orig_copy = boxes_orig.copy()
+                boxes_to_add = []
+                print(len(boxes_orig))
+                for box_new in boxes:
+                    for box in boxes_orig:
+                        if not self.rectangles_intersect(box, box_new):
+                            if box_new not in boxes_to_add:
+                                boxes_to_add.append(box_new)
+                        else:
+                            box_extension = self.compute_union_boxes(box, box_new)
+                            if box in boxes_orig_copy:
+                                boxes_orig_copy.remove(box)
+                            if box_extension not in boxes_to_add:
+                                boxes_to_add.append(box_extension)
+
+                boxes_orig = boxes_orig_copy
+                boxes_orig.extend(boxes_to_add)
+
+        print('Finish inference')
+        image = self.draw_bounding_boxes(image.copy(), boxes_orig)
+        self.write_image(image, image_prefix="full_image")
+        self.write_image(image_debug, image_prefix="image_patches")
+
+        return boxes_orig
+
+
+
 
     def main(self, image_path):
-        self.output_dir = Path(self.output_dir) / Path(image_path).stem
+        text = "split" if self.split_image else "full"
+        self.output_dir = Path(self.output_dir) / f"{Path(image_path).stem}_{text}"
+        if Path(self.output_dir).exists():
+            import os
+            os.system(f"rm -r {self.output_dir}")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.output_prefix = Path(image_path).stem
 
         image = self.preprocess_image(image_path)
-        boxes = self.yolov5_inference(image)
+        if self.split_image:
+            #split the image in patches
+            boxes = self.split_image_and_run_inference(image)
+        else:
+            boxes = self.yolov5_inference(image)
         res = self.classifier(image, boxes)
         #res = self.classifier_batch(image, boxes)
         res = self.compute_metrics(res)
@@ -287,8 +431,8 @@ class Pipeline:
         return self.output_dir
 
 
-def main(image_path,conf_th=0.6, iou_th=0.4, debug=True, model_path=None):
-    pipeline = Pipeline(conf_th=conf_th, iou_th=iou_th,debug=debug, model_path=model_path)
+def main(image_path,conf_th=0.6, iou_th=0.4, debug=True, model_path=None, split_image=False):
+    pipeline = Pipeline(conf_th=conf_th, iou_th=iou_th,debug=debug, model_path=model_path, split_image=split_image)
     output_dir  = pipeline.main(image_path)
 
     return output_dir
@@ -302,6 +446,7 @@ if __name__ == "__main__":
     parser.add_argument("--conf_th", type=float, default=0.6)
     parser.add_argument("--iou_th", type=float, default=0.4)
     parser.add_argument("--debug", type=bool, default=True)
+    parser.add_argument("--split_image", type=bool, default=False)
 
     args = parser.parse_args()
-    main(args.image_path, args.conf_th, args.iou_th, args.debug, args.model_path)
+    main(args.image_path, args.conf_th, args.iou_th, args.debug, args.model_path, split_image=args.split_image)
