@@ -344,7 +344,7 @@ class Pipeline:
         :param image:
         :return:
         """
-        #TODO fix bug in the intersection
+        #TODO fix bug in the intersection of the patches
         #1.0 split image in patches with a factor of 0.25
 
         Hi, Wi, _ = image.shape
