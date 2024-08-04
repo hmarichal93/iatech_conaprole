@@ -298,7 +298,7 @@ if __name__ == "__main__":
     #image_path and model_path are the arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--image_path", type=str, default="images_for_demo/autml/IMG_9140.png")
-    parser.add_argument("--model_path", type=str, default="/data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt")
+    parser.add_argument("--model_path", type=str, default="./weights/best.pt")
     parser.add_argument("--conf_th", type=float, default=0.6)
     parser.add_argument("--iou_th", type=float, default=0.4)
     parser.add_argument("--debug", type=bool, default=True)
