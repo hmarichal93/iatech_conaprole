@@ -214,8 +214,17 @@ class Pipeline:
 
 
     def compute_metrics(self, res):
+        #count frequency of each product
+        from collections import Counter
+        import pandas as pd
 
-        pass
+        counter = Counter(res)
+        print(counter)
+        df = pd.DataFrame(counter.items(), columns=["Product", "Frequency"])
+        #save df as html
+        self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
+        df.to_html(self.output_metrics_path)
+        return self.output_metrics_path
 
     def print_metrics(self, res):
         pass
