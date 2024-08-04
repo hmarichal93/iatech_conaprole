@@ -36,9 +36,13 @@ class Pipeline:
                     matcher=matcher.loftr_matcher,
                     debug=True,
                     num_processes = 1,
-                    product_database_dir= "/data/ia_tech_conaprole/cluster/matcher_classifier_four_products"):
+                    product_database_dir= "/data/ia_tech_conaprole/cluster/matcher_classifier_four_products",
+                    conf_th=0.6, iou_th=0.45):
 
         self.output_dir = output_dir
+        if Path(self.output_dir).exists():
+            import os
+            os.system(f"rm -r {self.output_dir}")
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
         self.device = device
@@ -55,8 +59,8 @@ class Pipeline:
 
         self.num_processes = num_processes
         self.size = 640
-        self.conf_thres = 0.6
-        self.iou_thres = 0.45
+        self.conf_thres = conf_th
+        self.iou_thres = iou_th
         self.score_th = 60
 
     def load_yolov5_model(self, model_path):
@@ -278,14 +282,14 @@ class Pipeline:
         #res = self.classifier_batch(image, boxes)
         res = self.compute_metrics(res)
         self.print_metrics()
-        return res
+        return self.output_dir
 
 
-def main(image_path, debug):
-    pipeline = Pipeline(debug=debug)
-    pipeline.main(image_path)
+def main(image_path,conf_th=0.6, iou_th=0.4, debug=True):
+    pipeline = Pipeline(conf_th=conf_th, iou_th=iou_th,debug=debug)
+    output_dir  = pipeline.main(image_path)
 
-    return
+    return output_dir
 
 if __name__ == "__main__":
     #image_path = "./assets/IMG_9149.png"

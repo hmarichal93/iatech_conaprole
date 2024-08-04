@@ -10,6 +10,10 @@ from app import main as main_app
 def main():
     st.title("Demo IA CHallenge Conaprole Equipo 1")
 
+
+    conf_thres = st.slider("Confidence Threshold", 0.0, 1.0, 0.60, 0.05)
+    iou_thres = st.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
+
     # Subir imagen
     uploaded_file = st.file_uploader("Seleccionar una imagen...", type=["jpg", "jpeg", "png"])
 
@@ -26,7 +30,7 @@ def main():
         st.write("")
 
         st.write("Procesando imagen...")
-        output_dir = main_app(str("image.png"))
+        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres)
 
         processed_image_path = Path(output_dir).glob("*detection*").__next__()
         processed_image = Image.open(processed_image_path)
