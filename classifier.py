@@ -362,37 +362,58 @@ class AutoML_Classifier:
         self.default_dir.mkdir(parents=True, exist_ok=True)
         self.client = aiplatform.gapic.PredictionServiceClient(client_options={"api_endpoint": f"{location}-aiplatform.googleapis.com"})
 
-    def predict(self, image, image_name=None):
-        #prepare the image
-        image = resize_image_using_pil_lib(image, 640, 480)
-        #convert image to RGB
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        #write image to disk
-        default_image_path = f"{self.default_dir}/{image_name}.png"
-        cv2.imwrite(default_image_path, image)
+    def predict(self, images, image_names=None, confidence=0.1, max_predictions=2):
+        instances = []
+        batch_intances = []
+        batch_intances.append(instances)
+        max_size = 10000000
+        file_content_size = 0
+        for image, image_name in zip(images, image_names):
+            #prepare the image
+            image = resize_image_using_pil_lib(image, 640, 480)
+            #convert image to RGB
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            #write image to disk
+            default_image_path = f"{self.default_dir}/{image_name}.png"
+            cv2.imwrite(default_image_path, image)
 
-        #
-        with open(default_image_path, "rb") as f:
-            file_content = f.read()
+            #
+            with open(default_image_path, "rb") as f:
+                file_content = f.read()
+            file_content_size += len(file_content)
+            if file_content_size > max_size:
+                batch_intances.append(instances)
+                instances = []
+                file_content_size = 0
+            # The format of each instance should conform to the deployed model's prediction input schema.
+            encoded_content = base64.b64encode(file_content).decode("utf-8")
+            instance = predict.instance.ImageClassificationPredictionInstance(
+                content=encoded_content,
+            ).to_value()
+            instances.append(instance)
+            #size of fifle_content
+            #print(f"Size of file_content: {len(file_content)}")
 
-        # The format of each instance should conform to the deployed model's prediction input schema.
-        encoded_content = base64.b64encode(file_content).decode("utf-8")
-        instance = predict.instance.ImageClassificationPredictionInstance(
-            content=encoded_content,
-        ).to_value()
-        instances = [instance]
+
         # See gs://google-cloud-aiplatform/schema/predict/params/image_classification_1.0.0.yaml for the format of the parameters.
         parameters = predict.params.ImageClassificationPredictionParams(
-            confidence_threshold=0.1,
-            max_predictions=2,
+            confidence_threshold=confidence,
+            max_predictions=max_predictions,
         ).to_value()
         endpoint = self.client.endpoint_path(
             project=self.project_id, location=self.location, endpoint=self.model_id
         )
-        response = self.client.predict(
-            endpoint=endpoint, instances=instances, parameters=parameters
-        )
-        predictions = response.predictions
+        predictions_list = []
+        for batch in batch_intances:
+            response = self.client.predict(
+                endpoint=endpoint, instances=batch, parameters=parameters
+            )
+            predictions = response.predictions
+            for prediction in predictions:
+                #print(" prediction:", dict(prediction))
+                predictions_list.append(prediction)
+
+        predictions = predictions_list
         prediction = predictions[0]
         aux = dict(prediction)
         # print(" prediction:", dict(prediction))
@@ -406,6 +427,8 @@ class AutoML_Classifier:
         # print(f"Display Name: {corresponding_display_name}\n")
 
         return corresponding_display_name, default_image_path, max_confidence
+
+
 
 def test_classifier():
 

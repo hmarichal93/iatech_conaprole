@@ -118,9 +118,9 @@ class Pipeline:
 
         image = np.array(img)
 
-        if self.debug:
-            image = self.draw_bounding_boxes(image.copy(), boxes)
-            self.write_image(image)
+        #if self.debug:
+        image = self.draw_bounding_boxes(image.copy(), boxes)
+        self.write_image(image)
 
         return boxes
 
@@ -173,7 +173,7 @@ class Pipeline:
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
             bbox_image = image[y1:y2, x1:x2]
             prefix = f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}"
-            product_name, _ , score = classifier.predict(bbox_image, prefix)
+            product_name, _ , score = classifier.predict([bbox_image], [prefix])
             if product_name is None:
                 continue
 
@@ -188,6 +188,38 @@ class Pipeline:
             if self.debug:
                 output_dir = self.output_dir / product_name
                 output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{prefix}_{int(score*100)}.png"
+                #print(f"Product Name: {product_name} Ratio Inference: ", score)
+                bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(str(output_path), bbox_image)
+
+        return product_name_list
+
+    def classifier_batch(self, image, boxes, classifier_type="automl"):
+        from classifier import AutoML_Classifier
+        classifier = AutoML_Classifier(default_dir=self.output_dir)
+
+        product_name_list = []
+        bbox_images = []
+        prefixes = []
+        for box in tqdm(boxes, desc="Classifying boxes"):
+            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            bbox_image = image[y1:y2, x1:x2]
+            prefix = f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}"
+            bbox_images.append(bbox_image)
+            prefixes.append(prefix)
+        product_names, _, scores = classifier.predict(bbox_images, prefixes, self.conf_thres)
+
+
+
+        if self.debug:
+            for idx, product_name in enumerate(product_names):
+                output_dir = self.output_dir / product_name
+                output_dir.mkdir(parents=True, exist_ok=True)
+                score = scores[idx]
+                prefix = prefixes[idx]
+                bbox_image = bbox_images[idx]
                 output_path = output_dir / f"{prefix}_{int(score*100)}.png"
                 #print(f"Product Name: {product_name} Ratio Inference: ", score)
                 bbox_image = cv2.cvtColor(bbox_image, cv2.COLOR_RGB2BGR)
@@ -243,21 +275,22 @@ class Pipeline:
         image = self.preprocess_image(image_path)
         boxes = self.yolov5_inference(image)
         res = self.classifier(image, boxes)
+        #res = self.classifier_batch(image, boxes)
         res = self.compute_metrics(res)
         self.print_metrics()
         return res
 
 
-def main(image_path):
-    pipeline = Pipeline()
+def main(image_path, debug):
+    pipeline = Pipeline(debug=debug)
     pipeline.main(image_path)
 
     return
 
 if __name__ == "__main__":
-    image_path = "./assets/WhatsApp Image 2024-05-24 at 12.00.13 (2).jpeg"
-    image_path = "./assets/IMG_9149.png"
-    #image_path = "./assets/IMG_9156.png"
+    #image_path = "./assets/IMG_9149.png"
+    image_path = "./assets/IMG_9156.png"
     #image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
     image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
-    main(image_path)
+    image_path = "images_for_demo/autml/IMG_9140.png"
+    main(image_path, debug=False)
