@@ -1,3 +1,5 @@
+import os
+
 import cv2
 import cv2 as cv
 import numpy as np
@@ -366,7 +368,7 @@ class AutoML_Classifier:
         instances = []
         batch_intances = []
         batch_intances.append(instances)
-        max_size = 10000000
+        max_size = 1000000
         file_content_size = 0
         for image, image_name in zip(images, image_names):
             #prepare the image
@@ -374,7 +376,7 @@ class AutoML_Classifier:
             #convert image to RGB
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             #write image to disk
-            default_image_path = f"{self.default_dir}/{image_name}.png"
+            default_image_path = f"{self.default_dir}/{image_name}.jpeg"
             cv2.imwrite(default_image_path, image)
 
             #
@@ -427,6 +429,43 @@ class AutoML_Classifier:
         # print(f"Display Name: {corresponding_display_name}\n")
 
         return corresponding_display_name, default_image_path, max_confidence
+
+    def batch_prediction(self, images, image_names=None, confidence=0.1, max_predictions=2):
+        x_test = []
+        #image_names = []
+        bucket = "gs://conaprole_prediccion"
+        for image, image_name in zip(images, image_names):
+            #prepare the image
+            image = resize_image_using_pil_lib(image, 640, 480)
+            #convert image to RGB
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            #write image to disk
+            file_name = f"{image_name}.jpeg"
+            default_image_path = f"{self.default_dir}/{file_name}"
+            cv2.imwrite(default_image_path, image)
+
+            x_test.append({"content": f"{bucket}/{file_name}","mimeType": "image/jpeg"})
+
+
+        command = f"gcloud storage cp {self.default_dir}/*.jpeg gs://conaprole_prediccion"
+        os.system(command)
+
+
+
+        my_model = aiplatform.Model(self.model_id, project=self.project_id, location=self.location)
+        batch_prediction_job = my_model.batch_predict(
+            job_display_name="test",
+            gcs_source=x_test,
+            gcs_destination_prefix=bucket,
+            sync=True,
+        )
+
+        batch_prediction_job.wait()
+
+        print(batch_prediction_job.display_name)
+        print(batch_prediction_job.resource_name)
+        print(batch_prediction_job.state)
+        print( batch_prediction_job)
 
 
 

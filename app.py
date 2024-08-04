@@ -218,7 +218,8 @@ class Pipeline:
             prefix = f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}"
             bbox_images.append(bbox_image)
             prefixes.append(prefix)
-        product_names, _, scores = classifier.predict(bbox_images, prefixes, self.conf_thres)
+        product_names, _, scores = classifier.batch_prediction(bbox_images, prefixes, self.conf_thres)
+        #product_names, _, scores = classifier.predict(bbox_images, prefixes, self.conf_thres)
 
 
 
@@ -424,6 +425,8 @@ class Pipeline:
             boxes = self.split_image_and_run_inference(image)
         else:
             boxes = self.yolov5_inference(image)
+            image_debug = self.draw_bounding_boxes(image.copy(), boxes)
+            self.write_image(image_debug, image_prefix="full_image")
         res = self.classifier(image, boxes)
         #res = self.classifier_batch(image, boxes)
         res = self.compute_metrics(res)
