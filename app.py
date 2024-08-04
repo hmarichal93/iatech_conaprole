@@ -368,7 +368,7 @@ class Pipeline:
                 y1 = int(j * patch_size_y * (1 - overlapping))
                 y2 = y1 + patch_size_y
                 y2 = min(y2, Hi - 1) #if j < num_patches_y - 1 else Hi -2
-                print(f"Processing patch {i} {j}. {x1=} {x2=} {y1=} {y2=}")
+                #print(f"Processing patch {i} {j}. {x1=} {x2=} {y1=} {y2=}")
 
                 #y1 = min(y1,Hi)
                 patch = image[y1:y2, x1:x2]
