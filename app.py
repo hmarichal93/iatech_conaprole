@@ -257,8 +257,10 @@ class Pipeline:
         df["Share of Space"] = df["Share of Space"] * 100
         #limit to 2 decimal places
 
-
-
+        #invert the order of the dataframe by index
+        df = df.iloc[::-1]
+        #set index column name
+        df.index.name = "Index"
         #save df as html
         self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
         #share of space column only 2 decimal places
