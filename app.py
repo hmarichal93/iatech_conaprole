@@ -35,15 +35,21 @@ class Pipeline:
                     debug=True,
                     num_processes = 1,
                     product_database_dir= "/data/ia_tech_conaprole/cluster/matcher_classifier_four_products"):
-        self.model = self.load_yolov5_model(model_path)
+
         self.output_dir = output_dir
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self.debug = debug
         self.device = device
+        if device == Device.cuda:
+            self.yolo_device = select_device('0' if torch.cuda.is_available() else 'cpu')
+        else:
+            self.yolo_device = select_device('cpu')
 
         self.classifier_parameters = dict(product_database_dir= product_database_dir,
                                           feature_matcher=matcher,
                                           device=device)
+
+        self.model = self.load_yolov5_model(model_path)
 
         self.num_processes = num_processes
         self.size = 640
@@ -52,25 +58,12 @@ class Pipeline:
         self.score_th = 60
 
     def load_yolov5_model(self, model_path):
-        # model = yolov5.load(model_path)
-        # # set model parameters
-        # model.conf = 0.80  # NMS confidence threshold
-        # model.iou = 0.40  # NMS IoU threshold
-        # model.agnostic = False  # NMS class-agnostic
-        # model.multi_label = False  # NMS multiple labels per box
-        # model.max_det = 1000  # maximum number of detections per image
-        # model.size = 640  # image size
-        device = select_device('0' if torch.cuda.is_available() else 'cpu')
-        device = select_device('cpu')
-
-        model = attempt_load(model_path, device=device)
+        model = attempt_load(model_path, device=self.yolo_device)
         return model
 
     def preprocess_image(self, image_path):
         img = cv2.imread(image_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        #resize image
-        #img = cv2.resize(img, (640, 640))
         return img
 
     def draw_bounding_boxes(self, image, boxes, color = (255, 0, 0), thickness = 3):
@@ -90,19 +83,13 @@ class Pipeline:
 
     def yolov5_inference(self, img):
 
-        device = select_device('0' if torch.cuda.is_available() else 'cpu')
-        device = select_device('cpu')
-
-        #image = Image.fromarray(img)
-        #shape = image.size
-        #image_r = image.resize((self.size, self.size))
         Hi,Wi, _ = img.shape
         img_r = resize_image_using_pil_lib(img, self.size, self.size)
         Hf, Wf, _ = img_r.shape
         #img = np.array(image_r)
         img_r = img_r[:, :, ::-1].transpose(2, 0, 1)
         img_r = np.ascontiguousarray(img_r)
-        img_r = torch.from_numpy(img_r).to(device)
+        img_r = torch.from_numpy(img_r).to(self.yolo_device)
         img_r = img_r.float() / 255.0
         img_r = img_r.unsqueeze(0)
 
@@ -129,14 +116,6 @@ class Pipeline:
 
         image = np.array(img)
 
-        # results = self.model(img)
-        # predictions = results.pred[0]
-        # boxes = predictions[:, :4]  # x1, y1, x2, y2
-        # scores = predictions[:, 4]
-        # categories = predictions[:, 5]
-
-        # show detection bounding boxes on image
-        #results.show()
         if self.debug:
             image = self.draw_bounding_boxes(image.copy(), boxes)
             self.write_image(image)
@@ -182,9 +161,6 @@ class Pipeline:
                 cv2.imwrite(str(output_path), bbox_image)
 
     def classifier(self, image, boxes):
-        # if self.device == Device.cuda:
-        #     return self.classifier_multiprocessing(image, boxes)
-
         classifier = Matcher(**self.classifier_parameters).classifier
         product_name_list = []
         for box in boxes:
@@ -219,15 +195,16 @@ class Pipeline:
         import pandas as pd
 
         counter = Counter(res)
-        print(counter)
         df = pd.DataFrame(counter.items(), columns=["Product", "Frequency"])
         #save df as html
         self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
         df.to_html(self.output_metrics_path)
+        self.df_metrics = df
         return self.output_metrics_path
 
-    def print_metrics(self, res):
-        pass
+    def print_metrics(self):
+        print(self.df_metrics)
+
 
     def main(self, image_path):
         self.output_dir = Path(self.output_dir) / Path(image_path).stem
@@ -238,7 +215,7 @@ class Pipeline:
         boxes = self.yolov5_inference(image)
         res = self.classifier(image, boxes)
         res = self.compute_metrics(res)
-        self.print_metrics(res)
+        self.print_metrics()
         return res
 
 
@@ -253,5 +230,5 @@ if __name__ == "__main__":
     image_path = "./assets/IMG_9149.png"
     #image_path = "./assets/IMG_9156.png"
     image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 15.42.24 (2).jpeg"
-    #image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
+    image_path = "images_for_demo/matcher/WhatsApp Image 2024-05-24 at 12.17.32 (10).jpeg"
     main(image_path)
