@@ -57,7 +57,7 @@ class Pipeline:
         self.model = self.load_yolov5_model(model_path)
 
         self.num_processes = num_processes
-        self.size = 640
+        self.size = 1280
         self.conf_thres = conf_th
         self.iou_thres = iou_th
         self.score_th = 60
