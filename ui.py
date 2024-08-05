@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 
 from app import main as main_app
-
+import time
 def main(model_path="weights/best.pt"):
     st.title("Demo IA CHallenge Conaprole Equipo 1")
 
@@ -16,6 +16,7 @@ def main(model_path="weights/best.pt"):
     #check box to select if you want to split the image in patches
     split_image = st.checkbox("Split image in patches", value=False)
 
+    timestamp = time.time()
     # Subir imagen
     uploaded_file = st.file_uploader("Seleccionar una imagen...", type=["jpg", "jpeg", "png"])
     if uploaded_file is not None:
@@ -25,7 +26,7 @@ def main(model_path="weights/best.pt"):
 
         image = Image.open(uploaded_file)
         #save the image to a file
-        image.save("image.png")
+        image.save(f"image_{timestamp}.png")
 
         st.image(image, caption='Imagen.', use_column_width=True)
         st.write("")
