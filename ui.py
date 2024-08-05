@@ -26,13 +26,14 @@ def main(model_path="weights/best.pt"):
 
         image = Image.open(uploaded_file)
         #save the image to a file
-        image.save(f"image_{timestamp}.png")
+        image_name = f"image_{timestamp}.png"
+        image.save(image_name)
 
         st.image(image, caption='Imagen.', use_column_width=True)
         st.write("")
 
         st.write("Procesando imagen...")
-        output_dir = main_app(str("image.png"), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path, split_image= split_image)
+        output_dir = main_app(str(image_name), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path, split_image= split_image)
 
         processed_image_path = Path(output_dir).glob("*full_image*").__next__()
         processed_image = Image.open(processed_image_path)
