@@ -65,17 +65,20 @@ pip uninstall nvidia_cublas_cu11
 ./run.sh
 ```
 
-### Dataset
+## Dataset
+
 Put your image set in the dataset folder. You can use a symbolic link to the actual location of the dataset.
 Use the following command to create a symbolic link:
 
 ```bash
 ln -s /path/to/your/dataset/* dataset
+
 ```
 
 Folder structure should be as follows:
 * images - images provided by CONAPROLE
 * annotations - human labels for the images.
+
 
 
 ## Generate gt annotations
@@ -104,3 +107,4 @@ gcloud auth application-default login
 ```bash
 gcloud compute scp --project conaprole --zone us-west1-b --recurse  /data/ia_tech_conaprole/repos/Dense-Object-Detection/weights/best.pt  deeplearning-1-vm:~/iatech_conaprole
 ```
+
