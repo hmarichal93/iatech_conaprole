@@ -35,7 +35,7 @@ def main(model_path="weights/best.pt"):
         st.write("Procesando imagen...")
         output_dir = main_app(str(image_name), conf_th=conf_thres, iou_th=iou_thres, model_path=model_path, split_image= split_image)
 
-        processed_image_path = Path(output_dir).glob("*full_image*").__next__()
+        processed_image_path = Path(output_dir).glob("*full_image.*").__next__()
         processed_image = Image.open(processed_image_path)
 
         processed_image_conaprole_path = Path(output_dir).glob("*full_image_conaprole*").__next__()
