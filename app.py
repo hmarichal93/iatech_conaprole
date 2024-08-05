@@ -183,13 +183,15 @@ class Pipeline:
             bbox_image = image[y1:y2, x1:x2]
             prefix = f"{self.output_prefix}_{x1}_{y1}_{x2}_{y2}"
             product_name, _ , score = classifier.predict([bbox_image], [prefix])
-            if product_name is None:
-                continue
+            # if product_name is None:
+            #     continue
+            #
+            # if score < self.score_th and classifier_type != "automl":
+            #     continue
 
-            if score < self.score_th and classifier_type != "automl":
-                continue
-
-            if classifier_type == "automl" and score < self.conf_thres:
+            if (classifier_type == "automl" and score < self.conf_thres and score < self.score_th and
+                    classifier_type != "automl" and  product_name is None):
+                product_name_list.append(product_name)
                 continue
 
             product_name_list.append(product_name)
@@ -243,40 +245,69 @@ class Pipeline:
         #count frequency of each product
         from collections import Counter
         import pandas as pd
+        res = [product_name for product_name in res if product_name is not None]
+        res_p = []
+        for p in res:
+            if p is None:
+                res_p.append("None")
+            else:
+                res_p.append(p)
+        res = res_p
 
         counter = Counter(res)
         df = pd.DataFrame(counter.items(), columns=["Product", "Frequency"])
-
         #compuse share of space of each product. product_frequency / total_frequency
         df["Share of Space"] = df["Frequency"] / df["Frequency"].sum()
+        df["Share of Space"] = df["Share of Space"] * 100
+        #share of space column only 2 decimal places
+        df["Share of Space"] = df["Share of Space"].apply(lambda x: round(x, 2))
+        self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
+
+        df.to_html(self.output_metrics_path)
+
+        df_s = pd.DataFrame(columns=["Product", "Frequency", "Share of Space"])
 
         #add row with product with Conaprole prefix frequency
         conaprole_frequency = df[df["Product"].str.contains("Conaprole")]["Frequency"].sum()
         conaprole_share = conaprole_frequency / df["Frequency"].sum()
         #append using .loc method
-        df.loc[len(df)] = ["Conaprole", conaprole_frequency, conaprole_share]
+        df_s.loc[len(df_s)] = ["Conaprole", conaprole_frequency, conaprole_share]
         #compute row with product withou Conaprole prefix frequency
         others_frequency = df[~df["Product"].str.contains("Conaprole")]["Frequency"].sum()
         others_share = others_frequency / df["Frequency"].sum()
-        df.loc[len(df)] = ["Others", others_frequency, others_share]
+        df_s.loc[len(df_s)] = ["Others", others_frequency, others_share]
         #multiply by 100 to get percentage
-        df["Share of Space"] = df["Share of Space"] * 100
+        df_s["Share of Space"] = df_s["Share of Space"] * 100
         #limit to 2 decimal places
 
         #invert the order of the dataframe by index
-        df = df.iloc[::-1]
+        df_s = df_s.iloc[::-1]
         #set index column name
-        df.index.name = "Index"
+        #df.index.name = "Index"
         #save df as html
-        self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_metrics.html"
+        self.output_metrics_path = f"{self.output_dir}/{self.output_prefix}_global.html"
         #share of space column only 2 decimal places
-        df["Share of Space"] = df["Share of Space"].apply(lambda x: round(x, 2))
-        df.to_html(self.output_metrics_path)
-        self.df_metrics = df
+        df_s["Share of Space"] = df_s["Share of Space"].apply(lambda x: round(x, 2))
+        df_s.to_html(self.output_metrics_path)
+        self.df_metrics = df_s
         return self.output_metrics_path
 
-    def print_metrics(self):
+    def print_metrics(self, products_name, boxes, image):
         print(self.df_metrics)
+        image_debug = image.copy()
+        for product_name, box in zip(products_name, boxes):
+            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            if product_name is not None and "Conaprole" in product_name:
+                image_debug = cv2.rectangle(image_debug, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                image_debug[y1:y2, x1:x2,1] = 150
+            else:
+                image_debug = cv2.rectangle(image_debug, (x1, y1), (x2, y2), (255, 0, 0), 3)
+
+        image_debug = cv2.putText(image_debug, f"Conaprole Share of Space: {self.df_metrics.loc[self.df_metrics['Product'] == 'Conaprole']['Share of Space'].values[0]}%",
+                                  (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 4, cv2.LINE_AA)
+        self.write_image(image_debug, image_prefix="full_image_conaprole")
+
 
     @staticmethod
     def there_is_overlap(box1, box2):
@@ -327,12 +358,6 @@ class Pipeline:
             return x1, y1, x2, y2
         else:
             return x3, y3, x4, y4
-        # union_box = box1_p.union(box2_p)
-        # x, y = union_box.exterior.coords.xy
-        # x_min, y_min = min(x), min(y)
-        # x_max, y_max = max(x), max(y)
-
-        # return x_min, y_min, x_max, y_max
 
 
 
@@ -427,10 +452,10 @@ class Pipeline:
             boxes = self.yolov5_inference(image)
             image_debug = self.draw_bounding_boxes(image.copy(), boxes)
             self.write_image(image_debug, image_prefix="full_image")
-        res = self.classifier(image, boxes)
+        products_name = self.classifier(image, boxes)
         #res = self.classifier_batch(image, boxes)
-        res = self.compute_metrics(res)
-        self.print_metrics()
+        res = self.compute_metrics(products_name)
+        self.print_metrics(products_name, boxes, image)
         return self.output_dir
 
 

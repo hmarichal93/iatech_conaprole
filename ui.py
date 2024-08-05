@@ -36,19 +36,25 @@ def main(model_path="weights/best.pt"):
         processed_image_path = Path(output_dir).glob("*full_image*").__next__()
         processed_image = Image.open(processed_image_path)
 
-        df_path = Path(output_dir).glob("*.html").__next__()
-        df = pd.read_html(df_path, index_col=0)[0]
+        processed_image_conaprole_path = Path(output_dir).glob("*full_image_conaprole*").__next__()
+        processed_image_conaprole = Image.open(processed_image_conaprole_path)
 
+        df_path = Path(output_dir).glob("*metrics.html").__next__()
+        df_details = pd.read_html(df_path, index_col=0)[0]
 
+        df_path = Path(output_dir).glob("*global.html").__next__()
+        df_global = pd.read_html(df_path, index_col=0)[0]
 
         # Procesar la imagen (convertir a escala de grises)
         #processed_image = image.convert("L")
 
         # Mostrar la imagen procesada
-        st.image(processed_image, caption='Imagen procesada).', use_column_width=True)
+        st.image(processed_image, caption='Imagen procesada con delineamiento de productos. Primera Etapa', use_column_width=True)
+        st.image(processed_image_conaprole, caption='Imagen procesada con identificacion de productos. Segunda Etapa', use_column_width=True)
 
         # Mostrar dataframe
-        st.write(df)
+        st.write(df_global, "Share of Conaprole")
+        st.write(df_details, "Detalles de la detección")
 
         # Descargar la imagen procesada
         buf = io.BytesIO()
