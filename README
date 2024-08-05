@@ -1,12 +1,62 @@
-Please do not push to master branch. Use develop branch instead :)
+# IA Tech - Conaprole Challenge
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Product</th>
+      <th>Frequency</th>
+      <th>Share of Space</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>1</th>
+      <td>Others</td>
+      <td>164</td>
+      <td>47.13</td>
+    </tr>
+    <tr>
+      <th>0</th>
+      <td>Conaprole</td>
+      <td>184</td>
+      <td>52.87</td>
+    </tr>
+  </tbody>
+</table>
 
-### Dense-Object-Detection
+## Installation
+
+### Dense-Object-Detection submodule
+Pretrained YoloV5 model over [SKU110k](https://paperswithcode.com/dataset/sku110k) dataset. The model is trained on 110k images and 1.7M annotations.
+Download the pretrained model from [here](https://drive.google.com/file/d/1BRlXZD9MqYAYYnciMRQ50Mht9kBncf0l/view).
 ```bash
 git clone git@github.com:suryanshgupta9933/Dense-Object-Detection.git
+mv Dense-Object-Detection dod
 ```
 
+### Package installation
+1. Create a conda environment and install the required packages.
+```bash
+conda create -n conaprole python=3.7
+conda activate conaprole
+pip install -r requierments.txt
+```
+Install DenseObjectDetection requirements as well
+```bash
+cd dob
+pip install -r requirements.txt
+```
+In case of error with cuda11 and nvidia-cublas, uninstall nvidia-cublas-cu11
+```bash
+pip uninstall nvidia_cublas_cu11
+```
 
-## Dataset
+## Usage
+```bash
+./run.sh
+```
+
+### Dataset
 Put your image set in the dataset folder. You can use a symbolic link to the actual location of the dataset.
 Use the following command to create a symbolic link:
 
@@ -19,7 +69,7 @@ Folder structure should be as follows:
 * annotations - human labels for the images.
 
 
-## GEnerate gt annotations
+## Generate gt annotations
 
 1.0 download yolov5 baseline predicctions: https://github.com/hmarichal93/iatech_conaprole/releases/tag/v1.0
 2.0 run the following command
@@ -34,22 +84,7 @@ python product_annotation.py --image_path DATASETPATH/fotos de pdv/WhatsApp Imag
 
 ```
 
-
-### Create environment
-
-```bash
-conda create -n conaprole python=3.7
-pip install kornia
-pip install opencv-python
-pip install numpy
-pip install pandas
-pip install matplotlib
-pip install tqdm
-pip install kornia_moons
-pip install kornia_rs
-pip uninstall nvidia_cublas_cu11
-
-```
+## Google Cloud commands
 
 ### Connect to gcloud
 ```bash
