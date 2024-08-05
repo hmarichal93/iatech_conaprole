@@ -304,8 +304,8 @@ class Pipeline:
             else:
                 image_debug = cv2.rectangle(image_debug, (x1, y1), (x2, y2), (255, 0, 0), 3)
 
-        image_debug = cv2.putText(image_debug, f"Conaprole Share of Space: {self.df_metrics.loc[self.df_metrics['Product'] == 'Conaprole']['Share of Space'].values[0]}%",
-                                  (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 4, cv2.LINE_AA)
+        #image_debug = cv2.putText(image_debug, f"Conaprole Share of Space: {self.df_metrics.loc[self.df_metrics['Product'] == 'Conaprole']['Share of Space'].values[0]}%",
+        #                          (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 4, cv2.LINE_AA)
         self.write_image(image_debug, image_prefix="full_image_conaprole")
 
 
