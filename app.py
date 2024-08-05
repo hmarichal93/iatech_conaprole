@@ -105,7 +105,11 @@ class Pipeline:
         img_r = img_r.unsqueeze(0)
 
         # Run the YOLOv5 model on the image
-        pred = self.model(img_r)[0]
+        try:
+            pred = self.model(img_r)[0]
+        except Exception as e:
+            print("Resolución de la imagen no soportada")
+            raise
         pred = non_max_suppression(pred, conf_thres=self.conf_thres, iou_thres=self.iou_thres)
         # convert to numpy
         pred = [x.detach().cpu().numpy() for x in pred]
