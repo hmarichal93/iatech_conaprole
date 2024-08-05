@@ -1,4 +1,13 @@
-# IA Tech - Conaprole Challenge
+# IA Tech - Conaprole Challenge: Share of Space
+
+## Problem Statement
+The objective of this challenge is to estimate the share of space of a given product in a set of images. The share of space is defined as the percentage of the total area occupied by a product in a given image. The product is identified by its brand name. The images are taken from different points of sale (POS) and the products are placed on shelves. The images are taken from different angles and distances, and the products can be partially occluded by other products or objects. The images are provided by CONAPROLE and the products are from the CONAPROLE brand.
+## Images
+![Image 1](assets/image1.jpg)
+![Image 2](assets/image2.jpg)
+
+## Table
+
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
