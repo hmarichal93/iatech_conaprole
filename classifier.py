@@ -349,6 +349,10 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform.gapic.schema import predict
 import base64
 
+from google.cloud import aiplatform
+from google.protobuf import json_format
+from google.protobuf.struct_pb2 import Value
+
 class AutoML_Classifier:
 
     import os
@@ -434,40 +438,71 @@ class AutoML_Classifier:
         x_test = []
         #image_names = []
         bucket = "gs://conaprole_prediccion"
-        for image, image_name in zip(images, image_names):
-            #prepare the image
-            image = resize_image_using_pil_lib(image, 640, 480)
-            #convert image to RGB
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            #write image to disk
-            file_name = f"{image_name}.jpeg"
-            default_image_path = f"{self.default_dir}/{file_name}"
-            cv2.imwrite(default_image_path, image)
+        BATCH_PREDICTION_INSTANCES_FILE = "batch_prediction_instances.jsonl"
+        import json
 
-            x_test.append({"content": f"{bucket}/{file_name}","mimeType": "image/jpeg"})
+        with open(BATCH_PREDICTION_INSTANCES_FILE, "w") as f:
+                for image, image_name in tqdm(zip(images, image_names)):
+                    #prepare the image
+                    image = resize_image_using_pil_lib(image, 640, 480)
+                    #convert image to RGB
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    #write image to disk
+                    file_name = f"{image_name}.jpeg"
+                    default_image_path = f"{self.default_dir}/{file_name}"
+                    #cv2.imwrite(default_image_path, image)
+
+                    x_test.append({"content": f"{bucket}/{file_name}","mimeType": "image/jpeg"})
+                    x = (image).astype(np.uint8).tolist()
+                    f.write(json.dumps(x) + "\n")
 
 
-        command = f"gcloud storage cp {self.default_dir}/*.jpeg gs://conaprole_prediccion"
-        os.system(command)
+        #command = f"gcloud storage cp {self.default_dir}/*.jpeg gs://conaprole_prediccion"
+        #os.system(command)
+
+        print("Generation JsonL file: ")
 
 
 
-        my_model = aiplatform.Model(self.model_id, project=self.project_id, location=self.location)
-        batch_prediction_job = my_model.batch_predict(
-            job_display_name="test",
-            gcs_source=x_test,
-            gcs_destination_prefix=bucket,
-            sync=True,
+        BATCH_PREDICTION_GCS_SOURCE = (
+                bucket + "/batch_prediction_instances/" + BATCH_PREDICTION_INSTANCES_FILE
         )
 
-        batch_prediction_job.wait()
+        # Write instances at JSONL
 
-        print(batch_prediction_job.display_name)
-        print(batch_prediction_job.resource_name)
-        print(batch_prediction_job.state)
-        print( batch_prediction_job)
+        print("Uploading to  ", BATCH_PREDICTION_GCS_SOURCE)
 
+        # Upload to Cloud Storage bucket
+        command = f"gcloud storage cp {BATCH_PREDICTION_INSTANCES_FILE} {BATCH_PREDICTION_GCS_SOURCE}"
+        os.system(command)
 
+        print("Uploaded instances to: ", BATCH_PREDICTION_GCS_SOURCE)
+
+        MIN_NODES = 1
+        MAX_NODES = 1
+
+        # The name of the job
+        BATCH_PREDICTION_JOB_NAME = "cifar10_batch_prediction_unique"
+
+        # Folder in the bucket to write results to
+        DESTINATION_FOLDER = "batch_prediction_results"
+
+        # The Cloud Storage bucket to upload results to
+        BATCH_PREDICTION_GCS_DEST_PREFIX = bucket + "/" + DESTINATION_FOLDER
+
+        # Make SDK batch_predict method call
+        batch_prediction_job = model.batch_predict(
+            instances_format="jsonl",
+            predictions_format="jsonl",
+            job_display_name=BATCH_PREDICTION_JOB_NAME,
+            gcs_source=BATCH_PREDICTION_GCS_SOURCE,
+            gcs_destination_prefix=BATCH_PREDICTION_GCS_DEST_PREFIX,
+            model_parameters=None,
+            starting_replica_count=MIN_NODES,
+            max_replica_count=MAX_NODES,
+            machine_type="n1-standard-4",
+            sync=True,
+        )
 
 def test_classifier():
 
