@@ -107,7 +107,7 @@ class Pipeline:
         # Run the YOLOv5 model on the image
         try:
             pred = self.model(img_r)[0]
-        except Exception as e:
+        except RuntimeError as e:
             print("Resolución de la imagen no soportada")
             raise
         pred = non_max_suppression(pred, conf_thres=self.conf_thres, iou_thres=self.iou_thres)
