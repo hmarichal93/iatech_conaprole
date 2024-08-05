@@ -69,7 +69,7 @@ def resize_image_using_pil_lib(im_in: np.array, height_output: object, width_out
     minimum_side = min(pil_img.width, pil_img.height)
     maximum_side = max(pil_img.width, pil_img.height)
     ratio = minimum_side / maximum_side
-    if keep_ratio and ratio > 0.6:
+    if keep_ratio :#and ratio > 0.6:
         aspect_ratio = pil_img.height / pil_img.width
         if pil_img.width > pil_img.height:
             height_output = int(width_output * aspect_ratio) - 1
