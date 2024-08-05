@@ -7,18 +7,25 @@ from pathlib import Path
 
 from app import main as main_app
 import time
+
+# Establecer la configuración de la página, incluyendo el favicon
+st.set_page_config(
+    page_title="Equipo 1 Demo Conaprole",
+    page_icon="conaprole.jpg"  # Ruta al archivo favicon
+)
+
 def main(model_path="weights/best.pt"):
-    st.title("Demo IA CHallenge Conaprole Equipo 1")
+    st.title("Demo IA Challenge Conaprole Equipo 1")
 
 
-    conf_thres = st.slider("Confidence Threshold", 0.0, 1.0, 0.60, 0.05)
-    iou_thres = st.slider("IOU Threshold", 0.0, 1.0, 0.45, 0.05)
+    conf_thres = st.slider("Umbral de confianza ", 0.0, 1.0, 0.60, 0.05)
+    iou_thres = st.slider("Umbrak IOU", 0.0, 1.0, 0.45, 0.05)
     #check box to select if you want to split the image in patches
-    split_image = st.checkbox("Split image in patches", value=False)
+    split_image = st.checkbox("Dividir imagen (muchos elementos)", value=False)
 
     timestamp = time.time()
     # Subir imagen
-    uploaded_file = st.file_uploader("Seleccionar una imagen...", type=["jpg", "jpeg", "png"])
+    uploaded_file = st.file_uploader("Seleccionar una imagen", type=["jpg", "jpeg", "png"])
     if uploaded_file is not None:
         print(uploaded_file)
         # Leer la imagen
@@ -29,7 +36,7 @@ def main(model_path="weights/best.pt"):
         image_name = f"image_{timestamp}.png"
         image.save(image_name)
 
-        st.image(image, caption='Imagen.', use_column_width=True)
+        st.image(image, caption='Imagen', use_column_width=True)
         st.write("")
 
         st.write("Procesando imagen...")
@@ -55,7 +62,7 @@ def main(model_path="weights/best.pt"):
         st.image(processed_image_conaprole, caption='Imagen procesada con identificacion de productos. Segunda Etapa', use_column_width=True)
 
         # Mostrar dataframe
-        st.write(df_global, "Share of Conaprole")
+        st.write(df_global, "Share of space - Conaprole")
         st.write(df_details, "Detalles de la detección")
 
         # Descargar la imagen procesada
